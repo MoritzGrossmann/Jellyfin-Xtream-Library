@@ -1,0 +1,142 @@
+name: Publish Fork Manifest
+
+# Runs after "Build and Release" has attached the ZIP to a release, and writes the version
+# into manifest.json on the gh-pages branch. That file is the Jellyfin plugin repository URL.
+#
+# This file and scripts/update-fork-manifest.py are fork-only additions. They touch nothing
+# that upstream owns, so merging upstream/main stays conflict-free.
+
+on:
+  workflow_run:
+    workflows: ["Build and Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re)publish into the manifest (e.g. v2.0.28.1)'
+        required: true
+        type: string
+
+# One manifest writer at a time, or two quick releases would race on the push.
+concurrency:
+  group: publish-fork-manifest
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    # A tag push shows up as head_branch == the tag name. Branch pushes and failed builds are skipped.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Determine tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$RUN_TAG}"
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' is not of the form vX.Y.Z.W"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Full history so annotated tag messages are available for the changelog.
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+          path: src
+
+      # The script comes from the default branch, so re-publishing an old tag still works.
+      - name: Checkout script from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: tools
+          sparse-checkout: scripts
+
+      - name: Download release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dl
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "jellyfin-xtream-library_${VERSION}.zip" --dir dl
+          ls -l dl
+
+      # Release notes win; otherwise the annotated tag message; otherwise a bare line.
+      - name: Resolve changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BODY=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body || true)
+          if [ -z "${BODY//[[:space:]]/}" ]; then
+            BODY=$(git -C src for-each-ref "refs/tags/${TAG}" --format='%(contents)' || true)
+          fi
+          if [ -z "${BODY//[[:space:]]/}" ]; then
+            BODY="Release ${TAG}"
+          fi
+          printf '%s' "$BODY" > changelog.txt
+          cat changelog.txt
+
+      - name: Check out gh-pages
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" gh-pages >/dev/null 2>&1; then
+            git clone --branch gh-pages --single-branch \
+              "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" pages
+          else
+            git init -b gh-pages pages
+            git -C pages remote add origin \
+              "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+
+      - name: Update manifest
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 tools/scripts/update-fork-manifest.py \
+            --manifest pages/manifest.json \
+            --version "$VERSION" \
+            --zip "dl/jellyfin-xtream-library_${VERSION}.zip" \
+            --source-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/jellyfin-xtream-library_${VERSION}.zip" \
+            --changelog "$(cat changelog.txt)" \
+            --csproj src/Jellyfin.Xtream.Library/Jellyfin.Xtream.Library.csproj \
+            --owner "${GITHUB_REPOSITORY_OWNER}"
+          touch pages/.nojekyll
+
+      - name: Commit and push
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json .nojekyll
+          if git diff --cached --quiet; then
+            echo "Manifest already up to date"
+            exit 0
+          fi
+          git commit -m "Manifest: ${TAG}"
+          git push origin HEAD:gh-pages
