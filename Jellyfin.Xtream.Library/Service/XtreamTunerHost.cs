@@ -265,6 +265,16 @@ public class XtreamTunerHost : ITunerHost
         }
     }
 
+    /// <summary>
+    /// The provider a tuner channel id belongs to, for the playing-stream limit. Accepts the
+    /// plugin's own ids and the hdhr_ ids Jellyfin remaps them to.
+    /// </summary>
+    /// <param name="channelId">The channel id as Jellyfin knows it.</param>
+    /// <param name="providerIndex">The provider's index when the id is one of ours.</param>
+    /// <returns>True when the channel belongs to this tuner.</returns>
+    internal bool TryGetProviderIndex(string channelId, out int providerIndex)
+        => TryParseChannelId(channelId, out providerIndex, out _);
+
     private bool TryParseChannelId(string channelId, out int providerIndex, out int streamId)
     {
         providerIndex = 0;

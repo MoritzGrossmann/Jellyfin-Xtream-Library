@@ -49,6 +49,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // the next scan, taking watched state with it (GitHub #108).
         serviceCollection.AddSingleton<IChannel, XtreamCatchupChannel>();
         serviceCollection.AddSingleton<IScheduledTask, SyncLibraryTask>();
+        serviceCollection.AddSingleton<Service.ActiveStreamTracker>();
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<Service.ActiveStreamTracker>());
         serviceCollection.AddHostedService<Service.BetaChannelManager>();
         serviceCollection.AddHostedService<Service.NativeTunerRegistration>();
         serviceCollection.AddHostedService<Service.NativeTunerWarmup>();

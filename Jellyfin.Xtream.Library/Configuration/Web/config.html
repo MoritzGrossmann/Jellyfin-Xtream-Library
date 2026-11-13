@@ -267,6 +267,14 @@
                             <div id="dashboardProgressContent"></div>
                         </div>
 
+                        <!-- Active Streams -->
+                        <div class="dashboard-card" style="margin-top: 20px;">
+                            <h4>Active Streams</h4>
+                            <div id="dashboardActiveStreams">
+                                <span style="opacity: 0.5;">Loading...</span>
+                            </div>
+                        </div>
+
                         <!-- Library Stats -->
                         <div class="dashboard-card" style="margin-top: 20px;">
                             <h4>Library Stats</h4>
@@ -599,6 +607,27 @@
                                         <span>Test Dispatcharr</span>
                                     </button>
                                     <span id="dispatcharrStatus" style="margin-left: 10px;"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="verticalSection">
+                            <h3 class="sectionTitle">Parallel streams</h3>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="txtMaxConnections">Maximum parallel streams</label>
+                                <input is="emby-input" type="number" id="txtMaxConnections" name="MaxConnections"
+                                       min="0" max="1000" step="1" />
+                                <div class="fieldDescription">
+                                    How many streams may play through this provider at the same time. 0 means no limit.
+                                    The plugin counts what Jellyfin reports as playing. When one more starts, its playback is
+                                    stopped and the message below is shown. Use the number your provider allows for the account.
+                                </div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="txtMaxConnectionsMessage">Message when the limit is reached</label>
+                                <input is="emby-input" type="text" id="txtMaxConnectionsMessage" name="MaxConnectionsMessage" />
+                                <div class="fieldDescription">
+                                    Shown to the user whose stream was refused. Leave empty for the default text.
                                 </div>
                             </div>
                         </div>

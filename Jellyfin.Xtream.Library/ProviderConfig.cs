@@ -23,6 +23,13 @@ namespace Jellyfin.Xtream.Library;
 public class ProviderConfig
 {
     /// <summary>
+    /// The message shown to a user whose stream was refused because the provider's connections
+    /// were all in use, unless <see cref="MaxConnectionsMessage"/> says otherwise.
+    /// </summary>
+    public const string DefaultMaxConnectionsMessage =
+        "All connections of this provider are in use. Please try again once someone has stopped watching.";
+
+    /// <summary>
     /// Gets or sets the display name for this provider.
     /// </summary>
     public string Name { get; set; } = "Provider 1";
@@ -55,6 +62,25 @@ public class ProviderConfig
     /// Gets or sets an optional custom User-Agent string for API requests.
     /// </summary>
     public string UserAgent { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the number of streams that may play at the same time through this provider.
+    /// 0 means no limit. Playback beyond the limit is stopped and <see cref="MaxConnectionsMessage"/>
+    /// is shown to the user.
+    /// </summary>
+    public int MaxConnections { get; set; }
+
+    /// <summary>
+    /// Gets or sets the message shown when a stream is refused because
+    /// <see cref="MaxConnections"/> is reached. Blank means <see cref="DefaultMaxConnectionsMessage"/>.
+    /// </summary>
+    public string MaxConnectionsMessage { get; set; } = DefaultMaxConnectionsMessage;
+
+    /// <summary>
+    /// Gets <see cref="MaxConnectionsMessage"/>, or the default when it is blank.
+    /// </summary>
+    public string EffectiveMaxConnectionsMessage
+        => string.IsNullOrWhiteSpace(MaxConnectionsMessage) ? DefaultMaxConnectionsMessage : MaxConnectionsMessage.Trim();
 
     // =====================
     // Output
@@ -341,6 +367,7 @@ public class ProviderConfig
     public void Validate()
     {
         SyncParallelism = Math.Clamp(SyncParallelism, 1, 20);
+        MaxConnections = Math.Clamp(MaxConnections, 0, 1000);
 
         if (CategoryBatchSize < 0)
         {

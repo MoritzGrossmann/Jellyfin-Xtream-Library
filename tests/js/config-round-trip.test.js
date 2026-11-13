@@ -66,6 +66,8 @@ function fixture() {
         MaxRetries: 5 + n,
         RetryDelayMs: 2500 + n,
         TimeoutSeconds: 90 + n,
+        MaxConnections: 2 + n,
+        MaxConnectionsMessage: 'Provider ' + n + ' is full',
     });
 
     return {

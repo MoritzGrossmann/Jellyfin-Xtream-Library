@@ -99,6 +99,8 @@ var XtreamLibraryConfig = (function () {
             MaxRetries: 3,
             RetryDelayMs: 1000,
             TimeoutSeconds: 300,
+            MaxConnections: 0,
+            MaxConnectionsMessage: '',
         };
     },
 
@@ -211,6 +213,10 @@ var XtreamLibraryConfig = (function () {
         document.getElementById('txtMaxRetries').value = p.MaxRetries || 3;
         document.getElementById('txtRetryDelayMs').value = p.RetryDelayMs || 1000;
         document.getElementById('txtTimeoutSeconds').value = p.TimeoutSeconds || 300;
+        // ?? rather than ||: 0 is the real "no limit" setting.
+        document.getElementById('txtMaxConnections').value = p.MaxConnections ?? 0;
+        // An unset message shows as empty; the server falls back to its default text.
+        document.getElementById('txtMaxConnectionsMessage').value = p.MaxConnectionsMessage || '';
 
         document.getElementById('chkDownloadArtworkForUnmatched').checked = p.DownloadArtworkForUnmatched !== false;
         document.getElementById('chkEnableIncrementalSync').checked = p.EnableIncrementalSync !== false;
@@ -316,6 +322,9 @@ var XtreamLibraryConfig = (function () {
         p.MaxRetries = parseInt(document.getElementById('txtMaxRetries').value) || 3;
         p.RetryDelayMs = parseInt(document.getElementById('txtRetryDelayMs').value) || 1000;
         p.TimeoutSeconds = parseInt(document.getElementById('txtTimeoutSeconds').value) || 300;
+        var maxConnections = parseInt(document.getElementById('txtMaxConnections').value, 10);
+        p.MaxConnections = Number.isNaN(maxConnections) || maxConnections < 0 ? 0 : maxConnections;
+        p.MaxConnectionsMessage = document.getElementById('txtMaxConnectionsMessage').value.trim();
 
         p.DownloadArtworkForUnmatched = document.getElementById('chkDownloadArtworkForUnmatched').checked;
         p.EnableIncrementalSync = document.getElementById('chkEnableIncrementalSync').checked;
@@ -2400,9 +2409,75 @@ var XtreamLibraryConfig = (function () {
         });
     },
 
+    // Who is streaming through which provider right now.
+    loadActiveStreams: function () {
+        var self = this;
+        fetch(ApiClient.getUrl('XtreamLibrary/ActiveStreams'), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'MediaBrowser Token=' + ApiClient.accessToken()
+            }
+        }).then(function (r) {
+            return r.ok ? r.json() : null;
+        }).then(function (data) {
+            if (data) self.renderActiveStreams(data);
+        }).catch(function (err) {
+            console.error('Active streams load error:', err);
+        }).then(function () {
+            // Keep the list current while the Dashboard is the tab on screen.
+            clearTimeout(self.activeStreamsTimer);
+            var tab = document.getElementById('tab-dashboard');
+            if (tab && tab.classList && tab.classList.contains('active')) {
+                self.activeStreamsTimer = setTimeout(function () { self.loadActiveStreams(); }, 10000);
+            }
+        });
+    },
+
+    renderActiveStreams: function (providers) {
+        var container = document.getElementById('dashboardActiveStreams');
+        if (!container) return;
+
+        if (!providers || providers.length === 0) {
+            container.innerHTML = '<span style="opacity: 0.5;">No provider configured.</span>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < providers.length; i++) {
+            var p = providers[i];
+            var streams = p.Streams || [];
+            var limit = p.MaxConnections > 0 ? p.MaxConnections : null;
+            var full = limit !== null && streams.length >= limit;
+
+            html += '<div style="margin-bottom: 12px;">';
+            html += '<strong>' + this.escapeHtml(p.ProviderName || ('Provider ' + (i + 1))) + '</strong> ';
+            html += '<span style="opacity: 0.7;' + (full ? ' color: #e08282; opacity: 1;' : '') + '">'
+                + streams.length + ' / ' + (limit !== null ? limit : 'no limit') + '</span>';
+
+            if (streams.length === 0) {
+                html += '<div style="opacity: 0.5;">Nobody is streaming.</div>';
+            } else {
+                html += '<table class="dashboard-history-table"><thead><tr><th>User</th><th>Watching</th><th>Device</th><th>Since</th></tr></thead><tbody>';
+                for (var j = 0; j < streams.length; j++) {
+                    var s = streams[j];
+                    var device = [s.DeviceName, s.ClientName].filter(Boolean).join(' / ');
+                    html += '<tr><td>' + this.escapeHtml(s.UserName) + '</td><td>' + this.escapeHtml(s.ItemName)
+                        + '</td><td>' + this.escapeHtml(device) + '</td><td>' + new Date(s.StartedUtc).toLocaleTimeString() + '</td></tr>';
+                }
+
+                html += '</tbody></table>';
+            }
+
+            html += '</div>';
+        }
+
+        container.innerHTML = html;
+    },
+
     // Dashboard methods
     loadDashboard: function () {
         var self = this;
+        self.loadActiveStreams();
         fetch(ApiClient.getUrl('XtreamLibrary/Dashboard'), {
             method: 'GET',
             headers: {

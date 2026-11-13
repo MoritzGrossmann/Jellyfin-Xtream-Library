@@ -244,6 +244,7 @@ words, since they could reproduce it and we could not.
 | `/XtreamLibrary/ChannelLogo/{streamId}` | GET | Serve a local-path channel override logo |
 | `/XtreamLibrary/Streams/Vod` | GET | Fetch movies in a VOD category (`?categoryId=&providerIndex=`) |
 | `/XtreamLibrary/Series/List` | GET | Fetch series in a Series category (`?categoryId=&providerIndex=`) |
+| `/XtreamLibrary/ActiveStreams` | GET | Streams playing per provider, with the provider's `MaxConnections` |
 | `/XtreamLibrary/RetryFailed` | POST | Retry failed items from last sync |
 | `/XtreamLibrary/CleanMovies` | POST | Delete all Movies library content |
 | `/XtreamLibrary/CleanSeries` | POST | Delete all Series library content |
