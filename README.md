@@ -6,6 +6,8 @@
 
 A Jellyfin plugin that syncs Xtream VOD, Series, and Live TV content to native Jellyfin libraries. STRM-based movies and series with universal client compatibility, plus a native Live TV tuner with full EPG support.
 
+> **This is a fork** of [firestaerter3/Jellyfin-Xtream-Library](https://github.com/firestaerter3/Jellyfin-Xtream-Library) by [@firestaerter3](https://github.com/firestaerter3), which is itself based on [Jellyfin.Xtream](https://github.com/kevinjil/jellyfin-plugin-xtream). The core of the plugin is their work. This fork follows the upstream project and adds a few things on top, such as a **limit on concurrent streams per provider** with a configurable message for users who start a stream when all slots are in use. Fork releases are published from this repository through their own plugin manifest (see [Installation](#installation)). [docs/FORK-RELEASES.md](docs/FORK-RELEASES.md) describes how the fork is released and kept in sync.
+
 ## Features
 
 ### Core Functionality
@@ -89,14 +91,16 @@ Add the plugin repository to Jellyfin:
 1. Open **Dashboard → Plugins → Repositories**
 2. Click `+` to add a repository
 3. **Name:** `Xtream Plugins`
-4. **URL:** `https://firestaerter3.github.io/jellyfin-plugin-repo/manifest.json`
+4. **URL:** `https://moritzgrossmann.github.io/Jellyfin-Xtream-Library/manifest.json`
 5. Click **Save**
 
 Then install "Xtream Library" from the plugin catalog (under General category).
 
+The fork keeps the plugin's GUID, so it replaces an installed upstream version instead of installing next to it. Keep only one of the two repositories in Jellyfin.
+
 ### Manual Installation
 
-1. Download the latest release from [GitHub Releases](https://github.com/firestaerter3/Jellyfin-Xtream-Library/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/MoritzGrossmann/Jellyfin-Xtream-Library/releases)
 2. Copy to your Jellyfin plugins folder:
    - Docker: `/config/plugins/Xtream Library/`
    - Linux: `~/.local/share/jellyfin/plugins/Xtream Library/`
@@ -104,6 +108,8 @@ Then install "Xtream Library" from the plugin catalog (under General category).
 3. Restart Jellyfin
 
 ### Beta Channel (Opt-In)
+
+> The beta channel is **upstream's**. This fork publishes stable releases only, so ticking the option below installs upstream builds, not fork builds.
 
 Pre-release versions ship to a separate beta channel before being promoted to stable. To opt in:
 
@@ -345,10 +351,12 @@ This project is licensed under the GPL-3.0 License - see the LICENSE file for de
 
 ## Credits
 
+- Original plugin: [firestaerter3/Jellyfin-Xtream-Library](https://github.com/firestaerter3/Jellyfin-Xtream-Library) by firestaerter3, of which this repository is a fork
 - Xtream API client based on [Jellyfin.Xtream](https://github.com/kevinjil/jellyfin-plugin-xtream) by Kevin Jilissen
 
 ## Links
 
-- **Plugin Repository**: https://github.com/firestaerter3/Jellyfin-Xtream-Library
-- **Manifest URL**: https://firestaerter3.github.io/jellyfin-plugin-repo/manifest.json
-- **Issues**: https://github.com/firestaerter3/Jellyfin-Xtream-Library/issues
+- **Plugin Repository (this fork)**: https://github.com/MoritzGrossmann/Jellyfin-Xtream-Library
+- **Manifest URL**: https://moritzgrossmann.github.io/Jellyfin-Xtream-Library/manifest.json
+- **Issues**: https://github.com/MoritzGrossmann/Jellyfin-Xtream-Library/issues
+- **Upstream**: https://github.com/firestaerter3/Jellyfin-Xtream-Library
