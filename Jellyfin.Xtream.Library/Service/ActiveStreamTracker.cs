@@ -46,6 +46,7 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
     private readonly ISessionManager _sessionManager;
     private readonly IEnumerable<ITunerHost> _tunerHosts;
     private readonly ILogger<ActiveStreamTracker> _logger;
+    private static readonly TimeSpan MessageDelay = TimeSpan.FromSeconds(1.5);
     private bool _subscribed;
 
     /// <summary>
@@ -270,21 +271,10 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
 
     private async Task RefuseAsync(string sessionId, string providerName, string message)
     {
-        // Message first: some clients drop it once playback has ended. Either command can fail
-        // on a client that cannot be remote controlled; the limit is still counted correctly.
-        try
-        {
-            await _sessionManager.SendMessageCommand(
-                sessionId,
-                sessionId,
-                new MessageCommand { Header = providerName, Text = message, TimeoutMs = 15000 },
-                CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not show the stream limit message to session {Session}", sessionId);
-        }
-
+        // Stop first, then show the message once the client has left the player. Sent before the
+        // stop, the message is shown over a player that is torn down a moment later, and the
+        // Android clients lose it with the player screen. Either command can fail on a client
+        // that cannot be remote controlled; the limit is still counted correctly.
         try
         {
             await _sessionManager.SendPlaystateCommand(
@@ -296,6 +286,22 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not stop playback of session {Session}", sessionId);
+        }
+
+        await Task.Delay(MessageDelay).ConfigureAwait(false);
+
+        try
+        {
+            await _sessionManager.SendMessageCommand(
+                sessionId,
+                sessionId,
+                new MessageCommand { Header = providerName, Text = message, TimeoutMs = 15000 },
+                CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("Sent the stream limit message to session {Session}", sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not show the stream limit message to session {Session}", sessionId);
         }
     }
 
