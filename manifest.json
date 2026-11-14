@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "2.0.28.2",
+                "changelog": "Stream limit: the refusal message now reaches the user. Playback is refused before the player opens the stream, so a client no longer hangs on the loading animation when the provider is full, and the message is shown after the stop instead of being lost with the player screen.",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/MoritzGrossmann/Jellyfin-Xtream-Library/releases/download/v2.0.28.2/jellyfin-xtream-library_2.0.28.2.zip",
+                "checksum": "C65E19F961ACFB4393EEEB702ED0B78E",
+                "timestamp": "2026-11-14T09:28:24Z"
+            },
+            {
                 "version": "2.0.28.1",
                 "changelog": "Stream limit per provider: set a maximum number of simultaneous streams in each provider's settings. Playback beyond the limit is stopped and a configurable message is shown. The config page lists the streams playing right now.",
                 "targetAbi": "12.0.0.0",
