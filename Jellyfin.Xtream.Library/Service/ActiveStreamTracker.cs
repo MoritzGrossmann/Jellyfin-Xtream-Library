@@ -232,6 +232,69 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Checks, before a client opens the stream, whether the provider behind an item is full.
+    /// A client only reports playback once the stream plays, and a provider that enforces the
+    /// same limit never lets it start, so <see cref="OnPlaybackStart"/> would never run.
+    /// </summary>
+    /// <param name="item">The item the client wants to play.</param>
+    /// <param name="sessionKey">The requesting session's id, whose own slot does not count.</param>
+    /// <returns>The provider when it is full, otherwise null.</returns>
+    internal ProviderConfig? FindFullProvider(BaseItem item, string? sessionKey)
+    {
+        PluginConfiguration config;
+        try
+        {
+            config = Plugin.Instance.Configuration;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        int index = ResolveProvider(item, config.Providers);
+        if (index < 0 || index >= config.Providers.Count)
+        {
+            return null;
+        }
+
+        var provider = config.Providers[index];
+        if (provider.MaxConnections <= 0)
+        {
+            return null;
+        }
+
+        int others = Registry.Snapshot().Count(s => s.ProviderIndex == index
+            && !string.Equals(s.Key, sessionKey, StringComparison.Ordinal));
+        return others >= provider.MaxConnections ? provider : null;
+    }
+
+    /// <summary>
+    /// Shows the limit message on a client.
+    /// </summary>
+    /// <param name="sessionId">The client's session.</param>
+    /// <param name="provider">The provider that is full.</param>
+    /// <returns>A task that completes when the message was sent or failed.</returns>
+    internal Task NotifyAsync(string sessionId, ProviderConfig provider)
+        => SendMessageAsync(sessionId, provider.Name, provider.EffectiveMaxConnectionsMessage);
+
+    private async Task SendMessageAsync(string sessionId, string providerName, string message)
+    {
+        try
+        {
+            await _sessionManager.SendMessageCommand(
+                sessionId,
+                sessionId,
+                new MessageCommand { Header = providerName, Text = message, TimeoutMs = 15000 },
+                CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("Sent the stream limit message to session {Session}", sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not show the stream limit message to session {Session}", sessionId);
+        }
+    }
+
     private int ResolveProvider(BaseItem item, IReadOnlyList<ProviderConfig> providers)
     {
         if (item is LiveTvChannel channel)
@@ -289,20 +352,7 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         }
 
         await Task.Delay(MessageDelay).ConfigureAwait(false);
-
-        try
-        {
-            await _sessionManager.SendMessageCommand(
-                sessionId,
-                sessionId,
-                new MessageCommand { Header = providerName, Text = message, TimeoutMs = 15000 },
-                CancellationToken.None).ConfigureAwait(false);
-            _logger.LogInformation("Sent the stream limit message to session {Session}", sessionId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not show the stream limit message to session {Session}", sessionId);
-        }
+        await SendMessageAsync(sessionId, providerName, message).ConfigureAwait(false);
     }
 
     private static string? KeyOf(PlaybackProgressEventArgs e)

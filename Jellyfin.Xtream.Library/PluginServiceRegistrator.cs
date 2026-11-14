@@ -21,6 +21,7 @@ using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -51,6 +52,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IScheduledTask, SyncLibraryTask>();
         serviceCollection.AddSingleton<Service.ActiveStreamTracker>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<Service.ActiveStreamTracker>());
+        serviceCollection.Configure<MvcOptions>(o => o.Filters.Add<Api.StreamLimitFilter>());
         serviceCollection.AddHostedService<Service.BetaChannelManager>();
         serviceCollection.AddHostedService<Service.NativeTunerRegistration>();
         serviceCollection.AddHostedService<Service.NativeTunerWarmup>();
