@@ -341,10 +341,12 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
     {
         try
         {
+            // No TimeoutMs: Jellyfin Web shows a message that has one as a transient browser
+            // notification (when permitted), and one without as a dialog the user must confirm.
             await _sessionManager.SendMessageCommand(
                 sessionId,
                 sessionId,
-                new MessageCommand { Header = providerName, Text = message, TimeoutMs = 15000 },
+                new MessageCommand { Header = providerName, Text = message },
                 CancellationToken.None).ConfigureAwait(false);
             _logger.LogInformation("Sent the stream limit message to session {Session}", sessionId);
         }
