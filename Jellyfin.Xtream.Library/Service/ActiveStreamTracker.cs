@@ -44,6 +44,7 @@ namespace Jellyfin.Xtream.Library.Service;
 public sealed class ActiveStreamTracker : IHostedService, IDisposable
 {
     private readonly ISessionManager _sessionManager;
+    private readonly ILibraryManager _libraryManager;
     private readonly IEnumerable<ITunerHost> _tunerHosts;
     private readonly ILogger<ActiveStreamTracker> _logger;
     private static readonly TimeSpan MessageDelay = TimeSpan.FromSeconds(1.5);
@@ -53,14 +54,17 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
     /// Initializes a new instance of the <see cref="ActiveStreamTracker"/> class.
     /// </summary>
     /// <param name="sessionManager">Jellyfin's session manager.</param>
+    /// <param name="libraryManager">Jellyfin's library manager, to look up what a session plays.</param>
     /// <param name="tunerHosts">The registered tuner hosts, to place live channels.</param>
     /// <param name="logger">The logger.</param>
     public ActiveStreamTracker(
         ISessionManager sessionManager,
+        ILibraryManager libraryManager,
         IEnumerable<ITunerHost> tunerHosts,
         ILogger<ActiveStreamTracker> logger)
     {
         _sessionManager = sessionManager;
+        _libraryManager = libraryManager;
         _tunerHosts = tunerHosts;
         _logger = logger;
     }
@@ -204,6 +208,9 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         }
 
         var provider = config.Providers[providerIndex];
+
+        // Count what is really playing, so a stream whose start was never seen is not missed.
+        Refresh();
         var stream = new ActivePlayback(
             key,
             providerIndex,
@@ -242,6 +249,8 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
     /// <returns>The provider when it is full, otherwise null.</returns>
     internal ProviderConfig? FindFullProvider(BaseItem item, string? sessionKey)
     {
+        Refresh();
+
         PluginConfiguration config;
         try
         {
@@ -267,6 +276,56 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         int others = Registry.Snapshot().Count(s => s.ProviderIndex == index
             && !string.Equals(s.Key, sessionKey, StringComparison.Ordinal));
         return others >= provider.MaxConnections ? provider : null;
+    }
+
+    /// <summary>
+    /// Rebuilds the list of playing streams from Jellyfin's sessions, which know what every
+    /// client plays whether or not the plugin saw it start.
+    /// </summary>
+    internal void Refresh()
+    {
+        try
+        {
+            var config = Plugin.Instance.Configuration;
+            var current = new List<ActivePlayback>();
+            foreach (var session in _sessionManager.Sessions)
+            {
+                var playing = session.NowPlayingItem;
+                if (playing is null)
+                {
+                    continue;
+                }
+
+                var item = _libraryManager.GetItemById(playing.Id);
+                if (item is null)
+                {
+                    continue;
+                }
+
+                int index = ResolveProvider(item, config.Providers);
+                if (index < 0 || index >= config.Providers.Count)
+                {
+                    continue;
+                }
+
+                current.Add(new ActivePlayback(
+                    session.Id,
+                    index,
+                    session.UserName ?? "?",
+                    session.DeviceName ?? string.Empty,
+                    session.Client ?? string.Empty,
+                    item.Name ?? string.Empty,
+                    DateTime.UtcNow,
+                    item.Id.ToString("N", CultureInfo.InvariantCulture)));
+            }
+
+            Registry.Reconcile(current);
+        }
+        catch (Exception ex)
+        {
+            // Keep the last known list rather than fail a playback request over a counting problem.
+            _logger.LogWarning(ex, "Could not read the playing sessions");
+        }
     }
 
     /// <summary>

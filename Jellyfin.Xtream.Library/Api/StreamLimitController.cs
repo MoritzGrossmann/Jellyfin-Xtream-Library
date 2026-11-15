@@ -62,6 +62,7 @@ public class StreamLimitController : ControllerBase
             return Ok(Array.Empty<object>());
         }
 
+        _tracker.Refresh();
         var streams = _tracker.Registry.Snapshot();
         var result = providers
             .Select((p, i) => new

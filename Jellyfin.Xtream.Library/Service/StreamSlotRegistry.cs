@@ -86,6 +86,37 @@ public sealed class StreamSlotRegistry
     }
 
     /// <summary>
+    /// Replaces the registered streams with what is playing right now. The start and stop events
+    /// Jellyfin raises are not enough on their own: a stream that began before the plugin loaded,
+    /// or whose start was never reported, would not count, and one whose stop was lost would
+    /// keep a slot for good. A stream that is registered again keeps the time it started.
+    /// </summary>
+    /// <param name="current">The streams playing, one per key.</param>
+    public void Reconcile(IReadOnlyList<ActivePlayback> current)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+
+        lock (_lock)
+        {
+            var next = new Dictionary<string, ActivePlayback>(StringComparer.Ordinal);
+            foreach (var stream in current)
+            {
+                next[stream.Key] = _streams.TryGetValue(stream.Key, out var old)
+                    && old.ProviderIndex == stream.ProviderIndex
+                    && string.Equals(old.ItemId, stream.ItemId, StringComparison.Ordinal)
+                    ? stream with { StartedUtc = old.StartedUtc }
+                    : stream;
+            }
+
+            _streams.Clear();
+            foreach (var pair in next)
+            {
+                _streams[pair.Key] = pair.Value;
+            }
+        }
+    }
+
+    /// <summary>
     /// Counts the streams playing through a provider.
     /// </summary>
     /// <param name="providerIndex">The provider's index.</param>

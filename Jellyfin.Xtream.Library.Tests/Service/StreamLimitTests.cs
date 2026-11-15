@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using FluentAssertions;
 using Jellyfin.Xtream.Library;
 using Jellyfin.Xtream.Library.Service;
@@ -105,6 +106,39 @@ public class StreamLimitTests
 
         registry.Count(0).Should().Be(1);
         registry.Release("a", "ep2").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReconcileCountsAStreamWhoseStartWasNeverSeen()
+    {
+        var registry = new StreamSlotRegistry();
+        registry.Reconcile(new[] { Stream("unseen") });
+
+        registry.TryAcquire(Stream("late"), 1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReconcileDropsAStreamThatIsNoLongerPlaying()
+    {
+        var registry = new StreamSlotRegistry();
+        registry.TryAcquire(Stream("gone"), 1);
+
+        registry.Reconcile(Array.Empty<ActivePlayback>());
+
+        registry.Count(0).Should().Be(0);
+        registry.TryAcquire(Stream("next"), 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReconcileKeepsTheStartTimeOfAStreamItAlreadyKnew()
+    {
+        var registry = new StreamSlotRegistry();
+        var first = Stream("a") with { StartedUtc = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc) };
+        registry.TryAcquire(first, 1);
+
+        registry.Reconcile(new[] { Stream("a") });
+
+        registry.Snapshot().Single().StartedUtc.Should().Be(first.StartedUtc);
     }
 
     [Fact]
