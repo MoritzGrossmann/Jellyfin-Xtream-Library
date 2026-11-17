@@ -2141,31 +2141,107 @@ var XtreamLibraryConfig = (function () {
         { id: 'ProviderAuthFailed', label: 'Provider login failed' }
     ],
 
-    // Starting point for a new webhook. One template serves every event: a block only renders
-    // when the event carries the value it tests.
-    defaultWebhookTemplate: function () {
-        return '{\n' +
-            '  "event": "{{NotificationType}}",\n' +
-            '  "time": "{{UtcTimestamp}}",\n' +
-            '  "text": "' +
-            '{{#if UserName}}{{UserName}} - {{ItemName}} ({{ProviderName}}, {{ActiveStreams}}/{{MaxConnections}}){{/if}}' +
-            '{{#if DurationSeconds}}Sync {{#if Success}}finished{{else}}failed{{/if}} in {{DurationSeconds}}s: ' +
-            '{{MoviesCreated}} movies, {{EpisodesCreated}} episodes{{/if}}' +
-            '{{#if Reason}}{{ProviderName}} ({{Host}}): {{Reason}}{{/if}}"\n' +
-            '}';
+    // What choosing a service fills in. Every preset places Title, Message and Color, which the
+    // plugin writes for each event, so one template serves all events.
+    webhookServices: {
+        Generic: {
+            label: 'Generic webhook',
+            hint: 'Any URL that accepts a JSON body.',
+            urlPlaceholder: 'https://example.com/hook',
+            contentType: 'application/json',
+            headers: [],
+            template: '{\n' +
+                '  "event": "{{NotificationType}}",\n' +
+                '  "time": "{{UtcTimestamp}}",\n' +
+                '  "title": "{{Title}}",\n' +
+                '  "message": "{{Message}}",\n' +
+                '  "user": "{{UserName}}",\n' +
+                '  "item": "{{ItemName}}",\n' +
+                '  "provider": "{{ProviderName}}"\n' +
+                '}'
+        },
+        Discord: {
+            label: 'Discord',
+            hint: 'Channel settings, Integrations, Webhooks: copy the webhook URL.',
+            urlPlaceholder: 'https://discord.com/api/webhooks/ID/TOKEN',
+            contentType: 'application/json',
+            headers: [],
+            template: '{\n' +
+                '  "username": "Xtream Library",\n' +
+                '  "embeds": [{\n' +
+                '    "title": "{{Title}}",\n' +
+                '    "description": "{{Message}}",\n' +
+                '    "color": {{Color}},\n' +
+                '    "timestamp": "{{UtcTimestamp}}"\n' +
+                '  }]\n' +
+                '}'
+        },
+        Slack: {
+            label: 'Slack',
+            hint: 'Create an incoming webhook in your Slack app and copy its URL.',
+            urlPlaceholder: 'https://hooks.slack.com/services/T000/B000/XXXX',
+            contentType: 'application/json',
+            headers: [],
+            template: '{\n  "text": "*{{Title}}*\n{{Message}}"\n}'
+        },
+        Gotify: {
+            label: 'Gotify',
+            hint: 'Your Gotify server with an application token: /message?token=...',
+            urlPlaceholder: 'https://gotify.example.com/message?token=APP_TOKEN',
+            contentType: 'application/json',
+            headers: [],
+            template: '{\n  "title": "{{Title}}",\n  "message": "{{Message}}",\n  "priority": 5\n}'
+        },
+        Pushover: {
+            label: 'Pushover',
+            hint: 'Replace APP_TOKEN with your application token and USER_KEY with your user key.',
+            urlPlaceholder: 'https://api.pushover.net/1/messages.json',
+            defaultUrl: 'https://api.pushover.net/1/messages.json',
+            contentType: 'application/x-www-form-urlencoded',
+            headers: [],
+            template: 'token=APP_TOKEN&user=USER_KEY&title={{Title}}&message={{Message}}'
+        },
+        Telegram: {
+            label: 'Telegram',
+            hint: 'Put your bot token in the URL and your chat id in the template.',
+            urlPlaceholder: 'https://api.telegram.org/botBOT_TOKEN/sendMessage',
+            contentType: 'application/json',
+            headers: [],
+            template: '{\n  "chat_id": "CHAT_ID",\n  "text": "{{Title}}\n{{Message}}"\n}'
+        },
+        Ntfy: {
+            label: 'ntfy',
+            hint: 'Your ntfy server and topic. The title is sent as a header.',
+            urlPlaceholder: 'https://ntfy.sh/your-topic',
+            contentType: 'text/plain',
+            headers: [{ Key: 'Title', Value: '{{Title}}' }],
+            template: '{{{Message}}}'
+        }
     },
 
     makeDefaultWebhook: function () {
+        var preset = this.webhookServices.Generic;
         return {
             Name: 'Webhook ' + (this.webhooks.length + 1),
             IsEnabled: true,
+            Service: 'Generic',
             Url: '',
             Method: 'POST',
-            ContentType: 'application/json',
-            Template: this.defaultWebhookTemplate(),
-            Headers: [],
+            ContentType: preset.contentType,
+            Template: preset.template,
+            Headers: JSON.parse(JSON.stringify(preset.headers)),
             Events: ['StreamStarted', 'StreamStopped', 'StreamLimitReached', 'SyncCompleted', 'ProviderAuthFailed']
         };
+    },
+
+    // Applies a service preset to a webhook, keeping what identifies it (name, URL, events).
+    applyWebhookService: function (hook, service) {
+        var preset = this.webhookServices[service] || this.webhookServices.Generic;
+        hook.Service = this.webhookServices[service] ? service : 'Generic';
+        hook.ContentType = preset.contentType;
+        hook.Template = preset.template;
+        hook.Headers = JSON.parse(JSON.stringify(preset.headers));
+        if (!hook.Url && preset.defaultUrl) hook.Url = preset.defaultUrl;
     },
 
     renderWebhooks: function () {
@@ -2189,8 +2265,18 @@ var XtreamLibraryConfig = (function () {
             html += '<button type="button" class="wh-remove" title="Remove this webhook">Remove</button>';
             html += '</div>';
 
+            var service = self.webhookServices[hook.Service] ? hook.Service : 'Generic';
+            var servicePreset = self.webhookServices[service];
+            html += '<div style="margin-bottom: 8px;"><label>Service</label>';
+            html += '<select class="wh-service" style="width: 100%; ' + fieldStyle + '">';
+            Object.keys(self.webhookServices).forEach(function (id) {
+                html += '<option value="' + id + '"' + (id === service ? ' selected' : '') + '>' + self.escapeHtml(self.webhookServices[id].label) + '</option>';
+            });
+            html += '</select>';
+            html += '<div class="fieldDescription">' + self.escapeHtml(servicePreset.hint) + ' Choosing a service fills in the content type, headers and template below.</div></div>';
+
             html += '<div style="margin-bottom: 8px;"><label>Webhook URL</label>';
-            html += '<input type="text" class="wh-url" placeholder="https://example.com/hook" value="' + self.escapeHtml(hook.Url) + '" style="width: 100%; ' + fieldStyle + '"/></div>';
+            html += '<input type="text" class="wh-url" placeholder="' + self.escapeHtml(servicePreset.urlPlaceholder) + '" value="' + self.escapeHtml(hook.Url) + '" style="width: 100%; ' + fieldStyle + '"/></div>';
 
             html += '<div style="display: flex; gap: 8px; margin-bottom: 8px;">';
             html += '<div style="flex: 1;"><label>Method</label><select class="wh-method" style="width: 100%; ' + fieldStyle + '">';
@@ -2240,6 +2326,21 @@ var XtreamLibraryConfig = (function () {
 
         container.querySelectorAll('.xtream-webhook').forEach(function (card) {
             var index = parseInt(card.getAttribute('data-webhook-index'), 10);
+            var serviceSelect = card.querySelector('.wh-service');
+            serviceSelect.addEventListener('change', function () {
+                var hooks = self.readWebhooks();
+                var hook = hooks[index];
+                var previous = self.webhookServices[hook.Service] ? hook.Service : 'Generic';
+                var edited = hook.Template.trim() !== '' && hook.Template !== self.webhookServices[previous].template;
+                if (edited && !window.confirm('Replace the template, content type and headers with the ' +
+                    self.webhookServices[serviceSelect.value].label + ' preset? Your changes to them are lost.')) {
+                    serviceSelect.value = previous;
+                    return;
+                }
+                self.webhooks = hooks;
+                self.applyWebhookService(hook, serviceSelect.value);
+                self.renderWebhooks();
+            });
             card.querySelector('.wh-remove').addEventListener('click', function () {
                 self.webhooks = self.readWebhooks();
                 self.webhooks.splice(index, 1);
@@ -2281,6 +2382,7 @@ var XtreamLibraryConfig = (function () {
             result.push({
                 Name: card.querySelector('.wh-name').value.trim(),
                 IsEnabled: card.querySelector('.wh-enabled').checked,
+                Service: card.querySelector('.wh-service').value,
                 Url: card.querySelector('.wh-url').value.trim(),
                 Method: card.querySelector('.wh-method').value,
                 ContentType: card.querySelector('.wh-content-type').value.trim() || 'application/json',

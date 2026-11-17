@@ -65,6 +65,17 @@ public static class WebhookTemplate
     /// <returns>The rendered text.</returns>
     /// <exception cref="FormatException">The template has a block that is never closed or closed wrongly.</exception>
     public static string Render(string template, IReadOnlyDictionary<string, object?> data, bool escapeJson)
+        => Render(template, data, escapeJson ? WebhookEscape.Json : WebhookEscape.None);
+
+    /// <summary>
+    /// Renders a template.
+    /// </summary>
+    /// <param name="template">The template text.</param>
+    /// <param name="data">The values the template can use.</param>
+    /// <param name="escape">How <c>{{Name}}</c> is escaped.</param>
+    /// <returns>The rendered text.</returns>
+    /// <exception cref="FormatException">The template has a block that is never closed or closed wrongly.</exception>
+    public static string Render(string template, IReadOnlyDictionary<string, object?> data, WebhookEscape escape)
     {
         ArgumentNullException.ThrowIfNull(data);
         if (string.IsNullOrEmpty(template))
@@ -76,7 +87,7 @@ public static class WebhookTemplate
         int pos = 0;
         var nodes = ParseNodes(tokens, ref pos, null);
         var sb = new StringBuilder();
-        Emit(nodes, data, escapeJson, sb);
+        Emit(nodes, data, escape, sb);
         return sb.ToString();
     }
 
@@ -117,6 +128,13 @@ public static class WebhookTemplate
         _ => value.ToString() ?? string.Empty,
     };
 
+    private static string Escape(string value, WebhookEscape escape) => escape switch
+    {
+        WebhookEscape.Json => JsonEscape(value),
+        WebhookEscape.Url => Uri.EscapeDataString(value),
+        _ => value,
+    };
+
     private static string JsonEscape(string value)
     {
         // Serialising a string yields its quoted, escaped form; drop the quotes.
@@ -124,7 +142,7 @@ public static class WebhookTemplate
         return quoted.Substring(1, quoted.Length - 2);
     }
 
-    private static void Emit(List<Node> nodes, IReadOnlyDictionary<string, object?> data, bool escapeJson, StringBuilder sb)
+    private static void Emit(List<Node> nodes, IReadOnlyDictionary<string, object?> data, WebhookEscape escape, StringBuilder sb)
     {
         foreach (var node in nodes)
         {
@@ -136,7 +154,7 @@ public static class WebhookTemplate
                 case NodeKind.Variable:
                     data.TryGetValue(node.Text, out var value);
                     string text = Format(value);
-                    sb.Append(escapeJson && !node.Raw ? JsonEscape(text) : text);
+                    sb.Append(node.Raw ? text : Escape(text, escape));
                     break;
                 case NodeKind.If:
                 case NodeKind.Unless:
@@ -147,7 +165,7 @@ public static class WebhookTemplate
                         truthy = !truthy;
                     }
 
-                    Emit(truthy ? node.Children : node.Else, data, escapeJson, sb);
+                    Emit(truthy ? node.Children : node.Else, data, escape, sb);
                     break;
             }
         }

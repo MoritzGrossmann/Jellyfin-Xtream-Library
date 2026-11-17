@@ -1422,9 +1422,9 @@
                                     Templates use Handlebars syntax: <code>{{ItemName}}</code> inserts a value,
                                     <code>{{#if Success}}…{{else}}…{{/if}}</code> and <code>{{#unless Success}}…{{/unless}}</code> are conditions.
                                     With a JSON content type <code>{{Name}}</code> is escaped so quotes in a title cannot break the document;
-                                    <code>{{{Name}}}</code> inserts the value as it is.
+                                    <code>{{{Name}}}</code> inserts the value as it is. With a form content type values are URL-encoded. Header values are templates too.
                                     <ul style="margin: 8px 0 0 18px;">
-                                        <li><strong>All events:</strong> <code>NotificationType</code>, <code>UtcTimestamp</code></li>
+                                        <li><strong>All events:</strong> <code>NotificationType</code>, <code>UtcTimestamp</code>, and a ready-made <code>Title</code>, <code>Message</code> and <code>Color</code> (decimal RGB) describing the event</li>
                                         <li><strong>Stream started / ended / limit reached:</strong> <code>ProviderName</code>, <code>ProviderIndex</code>,
                                             <code>UserName</code>, <code>DeviceName</code>, <code>ClientName</code>, <code>ItemName</code>, <code>ItemId</code>,
                                             <code>ActiveStreams</code>, <code>MaxConnections</code></li>

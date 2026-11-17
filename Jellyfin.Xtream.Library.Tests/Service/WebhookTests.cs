@@ -146,3 +146,49 @@ public class WebhookServiceTests
         act.Should().NotThrow();
     }
 }
+
+public class WebhookDescriptionTests
+{
+    [Fact]
+    public void EveryEvent_GetsTitleMessageAndColor()
+    {
+        foreach (var name in WebhookEvents.All)
+        {
+            var all = WebhookService.WithCommon(name, WebhookService.SampleData(name));
+            all["Title"].Should().BeOfType<string>().Which.Should().NotBeNullOrEmpty(name);
+            all["Message"].Should().BeOfType<string>().Which.Should().NotBeNullOrEmpty(name);
+            all["Color"].Should().BeOfType<int>();
+        }
+    }
+
+    [Fact]
+    public void LimitMessage_NamesUserItemAndProvider()
+    {
+        var all = WebhookService.WithCommon(WebhookEvents.StreamLimitReached, WebhookService.SampleData(WebhookEvents.StreamLimitReached));
+        string message = (string)all["Message"]!;
+        message.Should().Contain("alice").And.Contain("The Matrix (1999)").And.Contain("Provider 1");
+    }
+
+    [Fact]
+    public void FailedSync_TitleSaysFailed_AndKeepsError()
+    {
+        var data = WebhookService.SampleData(WebhookEvents.SyncCompleted);
+        data["Success"] = false;
+        data["Error"] = "boom";
+        var all = WebhookService.WithCommon(WebhookEvents.SyncCompleted, data);
+        all["Title"].Should().Be("Library sync failed");
+        ((string)all["Message"]!).Should().StartWith("boom");
+    }
+
+    [Fact]
+    public void FormEscape_PercentEncodes()
+        => WebhookTemplate.Render("m={{X}}&r={{{X}}}", new Dictionary<string, object?> { ["X"] = "a b&c" }, WebhookEscape.Url)
+            .Should().Be("m=a%20b%26c&r=a b&c");
+
+    [Theory]
+    [InlineData("application/json", WebhookEscape.Json)]
+    [InlineData("application/x-www-form-urlencoded", WebhookEscape.Url)]
+    [InlineData("text/plain", WebhookEscape.None)]
+    public void ContentType_DecidesEscaping(string contentType, WebhookEscape expected)
+        => new WebhookConfig { ContentType = contentType }.Escape.Should().Be(expected);
+}

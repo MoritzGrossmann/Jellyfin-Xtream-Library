@@ -190,7 +190,41 @@ public sealed class WebhookService : IHostedService
             ["NotificationType"] = eventName,
             ["UtcTimestamp"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
         };
+        var (title, message, color) = Describe(eventName, all);
+        all["Title"] = title;
+        all["Message"] = message;
+        all["Color"] = color;
         return all;
+    }
+
+    // Human-readable text for each event, so one template serves every event and a service preset
+    // only has to place Title, Message and Color. Colors are decimal RGB, which Discord wants.
+    private static (string Title, string Message, int Color) Describe(string eventName, Dictionary<string, object?> d)
+    {
+        string S(string key) => d.TryGetValue(key, out var v) ? Convert.ToString(v, CultureInfo.InvariantCulture) ?? string.Empty : string.Empty;
+        string Streams() => $"{S("ActiveStreams")}/{S("MaxConnections")}";
+        return eventName switch
+        {
+            WebhookEvents.StreamStarted => ("Stream started", $"{S("UserName")} started {S("ItemName")} on {S("ProviderName")} ({Streams()} streams in use)", 3066993),
+            WebhookEvents.StreamStopped => ("Stream ended", $"{S("UserName")} stopped {S("ItemName")} on {S("ProviderName")}", 9807270),
+            WebhookEvents.StreamLimitReached => ("All streams in use", $"{S("UserName")} tried to play {S("ItemName")}, but all {S("MaxConnections")} streams of {S("ProviderName")} are in use", 15105570),
+            WebhookEvents.SyncStarted => ("Library sync started", $"Syncing {S("ProviderCount")} provider(s)", 3447003),
+            WebhookEvents.SyncCompleted => SyncSummary(d, S),
+            WebhookEvents.ProviderAuthFailed => ("Provider login failed", $"{S("ProviderName")} ({S("Host")}) refused the login: {S("Reason")}", 15158332),
+            _ => (eventName, string.Empty, 9807270),
+        };
+    }
+
+    private static (string Title, string Message, int Color) SyncSummary(Dictionary<string, object?> d, Func<string, string> s)
+    {
+        bool ok = d.TryGetValue("Success", out var v) && v is true;
+        string text = $"Movies +{s("MoviesCreated")} ~{s("MoviesUpdated")} -{s("MoviesDeleted")}, "
+            + $"episodes +{s("EpisodesCreated")} ~{s("EpisodesUpdated")} -{s("EpisodesDeleted")}, "
+            + $"channels +{s("ChannelsCreated")} ~{s("ChannelsUpdated")} -{s("ChannelsDeleted")}, "
+            + $"{s("Errors")} error(s), took {s("DurationSeconds")}s";
+        return ok
+            ? ("Library sync finished", text, 3066993)
+            : ("Library sync failed", (s("Error") + " - " + text).TrimStart(' ', '-'), 15158332);
     }
 
     private static HttpClient CreateHttpClient()
@@ -298,10 +332,10 @@ public sealed class WebhookService : IHostedService
         CancellationToken cancellationToken)
     {
         string body;
+        var values = data.ContainsKey("NotificationType") ? data : WithCommon(eventName, data);
         try
         {
-            var values = data.ContainsKey("NotificationType") ? data : WithCommon(eventName, data);
-            body = WebhookTemplate.Render(webhook.Template, new Dictionary<string, object?>(values), webhook.IsJson);
+            body = WebhookTemplate.Render(webhook.Template, new Dictionary<string, object?>(values), webhook.Escape);
         }
         catch (FormatException ex)
         {
@@ -316,9 +350,10 @@ public sealed class WebhookService : IHostedService
             request.Content = new StringContent(body, Encoding.UTF8, contentType.Split(';')[0].Trim());
             foreach (var header in webhook.Headers.Where(h => !string.IsNullOrWhiteSpace(h.Key)))
             {
-                if (!request.Headers.TryAddWithoutValidation(header.Key.Trim(), header.Value))
+                string headerValue = WebhookTemplate.Render(header.Value ?? string.Empty, values, WebhookEscape.None);
+                if (!request.Headers.TryAddWithoutValidation(header.Key.Trim(), headerValue))
                 {
-                    request.Content.Headers.TryAddWithoutValidation(header.Key.Trim(), header.Value);
+                    request.Content.Headers.TryAddWithoutValidation(header.Key.Trim(), headerValue);
                 }
             }
 
