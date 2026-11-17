@@ -369,6 +369,10 @@ public partial class StrmSyncService
             return globalResult;
         }
 
+        WebhookService.Publish(
+            WebhookEvents.SyncStarted,
+            new Dictionary<string, object?>(StringComparer.Ordinal) { ["ProviderCount"] = enabledProviders.Count });
+
         try
         {
             for (int i = 0; i < enabledProviders.Count; i++)
@@ -506,7 +510,59 @@ public partial class StrmSyncService
 
         LastSyncResult = globalResult;
         RecordSyncHistory(globalResult);
+        WebhookService.Publish(WebhookEvents.SyncCompleted, WebhookSyncData(globalResult));
         return globalResult;
+    }
+
+    /// <summary>
+    /// Asks the provider who the account is, only so a refusal reaches the auth-failure webhook.
+    /// Most Xtream servers answer a wrong password with 200 and an empty catalog, which a sync
+    /// would otherwise take for a provider with nothing in it. Nothing here changes the sync.
+    /// </summary>
+    private async Task CheckProviderAuthAsync(ProviderConfig provider, CancellationToken cancellationToken)
+    {
+        if (!Plugin.Instance.Configuration.Webhooks.Any(w => w.IsUsable && w.Events.Contains(WebhookEvents.ProviderAuthFailed)))
+        {
+            return;
+        }
+
+        try
+        {
+            await _client.GetUserAndServerInfoAsync(
+                new ConnectionInfo(provider.BaseUrl, provider.Username, provider.Password),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "The account check for {Provider} failed", provider.Name);
+        }
+    }
+
+    /// <summary>
+    /// Builds the template values for the end of a sync.
+    /// </summary>
+    /// <param name="result">The finished sync.</param>
+    /// <returns>The values.</returns>
+    internal static Dictionary<string, object?> WebhookSyncData(SyncResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["Success"] = result.Success,
+            ["Error"] = result.Error ?? string.Empty,
+            ["DurationSeconds"] = (int)Math.Round(result.Duration.TotalSeconds),
+            ["MoviesCreated"] = result.MoviesCreated,
+            ["MoviesUpdated"] = result.MoviesUpdated,
+            ["MoviesDeleted"] = result.MoviesDeleted,
+            ["SeriesCreated"] = result.SeriesCreated,
+            ["EpisodesCreated"] = result.EpisodesCreated,
+            ["EpisodesUpdated"] = result.EpisodesUpdated,
+            ["EpisodesDeleted"] = result.EpisodesDeleted,
+            ["ChannelsCreated"] = result.ChannelsCreated,
+            ["ChannelsUpdated"] = result.ChannelsUpdated,
+            ["ChannelsDeleted"] = result.ChannelsDeleted,
+            ["Errors"] = result.Errors,
+        };
     }
 
     /// <summary>
@@ -585,6 +641,8 @@ public partial class StrmSyncService
         _client.MaxRetries = provider.MaxRetries;
         _client.RetryDelayMs = provider.RetryDelayMs;
         _client.Timeout = TimeSpan.FromSeconds(provider.TimeoutSeconds);
+
+        await CheckProviderAuthAsync(provider, cancellationToken).ConfigureAwait(false);
 
         // Snapshot directory isolation. Shared with the regroup action, which has to find the
         // same snapshot this sync wrote.

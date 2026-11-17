@@ -50,6 +50,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // the next scan, taking watched state with it (GitHub #108).
         serviceCollection.AddSingleton<IChannel, XtreamCatchupChannel>();
         serviceCollection.AddSingleton<IScheduledTask, SyncLibraryTask>();
+        serviceCollection.AddSingleton<Service.WebhookService>();
+        serviceCollection.AddHostedService(sp => sp.GetRequiredService<Service.WebhookService>());
         serviceCollection.AddSingleton<Service.ActiveStreamTracker>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<Service.ActiveStreamTracker>());
         serviceCollection.Configure<MvcOptions>(o => o.Filters.Add<Api.StreamLimitFilter>());

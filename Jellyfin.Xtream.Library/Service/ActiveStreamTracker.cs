@@ -163,7 +163,39 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
         string? key = KeyOf(e);
         if (key is not null)
         {
-            Registry.Release(key, e.Item?.Id.ToString("N", CultureInfo.InvariantCulture));
+            string? itemId = e.Item?.Id.ToString("N", CultureInfo.InvariantCulture);
+            var held = Registry.Snapshot().FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal)
+                && (itemId is null || string.Equals(s.ItemId, itemId, StringComparison.Ordinal)));
+            if (Registry.Release(key, itemId) && held is not null)
+            {
+                PublishStream(WebhookEvents.StreamStopped, held);
+            }
+        }
+    }
+
+    private void PublishStream(string eventName, ActivePlayback stream)
+    {
+        try
+        {
+            var providers = Plugin.Instance.Configuration.Providers;
+            if (stream.ProviderIndex < 0 || stream.ProviderIndex >= providers.Count)
+            {
+                return;
+            }
+
+            var provider = providers[stream.ProviderIndex];
+            int active = Registry.Count(stream.ProviderIndex);
+            if (eventName == WebhookEvents.StreamLimitReached)
+            {
+                active = Math.Max(active, provider.MaxConnections);
+            }
+
+            WebhookService.Publish(eventName, WebhookService.StreamData(stream, provider, active));
+        }
+        catch (Exception ex)
+        {
+            // A webhook problem never reaches playback.
+            _logger.LogDebug(ex, "Could not publish the {Event} webhook", eventName);
         }
     }
 
@@ -209,6 +241,12 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
 
         var provider = config.Providers[providerIndex];
 
+        // Read before Refresh, which already lists what the session plays now: a start that was
+        // reported before is a repeat, one that was not is a new stream.
+        string newItemId = item.Id.ToString("N", CultureInfo.InvariantCulture);
+        bool alreadyCounted = Registry.Snapshot().Any(s => string.Equals(s.Key, key, StringComparison.Ordinal)
+            && string.Equals(s.ItemId, newItemId, StringComparison.Ordinal));
+
         // Count what is really playing, so a stream whose start was never seen is not missed.
         Refresh();
         var stream = new ActivePlayback(
@@ -223,9 +261,15 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
 
         if (Registry.TryAcquire(stream, provider.MaxConnections))
         {
+            if (!alreadyCounted)
+            {
+                PublishStream(WebhookEvents.StreamStarted, stream);
+            }
+
             return;
         }
 
+        PublishStream(WebhookEvents.StreamLimitReached, stream);
         _logger.LogWarning(
             "Provider {Provider} is at its limit of {Max} streams; stopping {User}'s playback of {Item}",
             provider.Name,
@@ -336,6 +380,29 @@ public sealed class ActiveStreamTracker : IHostedService, IDisposable
     /// <returns>A task that completes when the message was sent or failed.</returns>
     internal Task NotifyAsync(string sessionId, ProviderConfig provider)
         => SendMessageAsync(sessionId, provider.Name, provider.EffectiveMaxConnectionsMessage);
+
+    /// <summary>
+    /// Raises the webhook for a playback request that was refused because the provider is full.
+    /// </summary>
+    /// <param name="item">What the user tried to play.</param>
+    /// <param name="session">The user's session, when known.</param>
+    /// <param name="provider">The provider that is full.</param>
+    internal void PublishLimitReached(BaseItem item, SessionInfo? session, ProviderConfig provider)
+    {
+        var config = Plugin.Instance.Configuration;
+        int index = config.Providers.IndexOf(provider);
+        PublishStream(
+            WebhookEvents.StreamLimitReached,
+            new ActivePlayback(
+                session?.Id ?? string.Empty,
+                index,
+                session?.UserName ?? "?",
+                session?.DeviceName ?? string.Empty,
+                session?.Client ?? string.Empty,
+                item.Name ?? string.Empty,
+                DateTime.UtcNow,
+                item.Id.ToString("N", CultureInfo.InvariantCulture)));
+    }
 
     private async Task SendMessageAsync(string sessionId, string providerName, string message)
     {

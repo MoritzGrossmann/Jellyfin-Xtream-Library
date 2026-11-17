@@ -256,7 +256,17 @@ public class XtreamClient(HttpClient client, ILogger<XtreamClient> logger) : IXt
     private async Task<T> QueryApi<T>(ConnectionInfo connectionInfo, string urlPath, CancellationToken cancellationToken)
     {
         Uri uri = new Uri(connectionInfo.BaseUrl + urlPath);
-        string jsonContent = await GetStringWithRetryAsync(uri, cancellationToken).ConfigureAwait(false);
+        string jsonContent;
+        try
+        {
+            jsonContent = await GetStringWithRetryAsync(uri, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            int status = (int)ex.StatusCode!.Value;
+            WebhookService.PublishAuthFailure(connectionInfo, $"HTTP {status} {ex.StatusCode}", status);
+            throw;
+        }
 
         try
         {
@@ -409,11 +419,21 @@ public class XtreamClient(HttpClient client, ILogger<XtreamClient> logger) : IXt
         }
     }
 
-    public Task<PlayerApi> GetUserAndServerInfoAsync(ConnectionInfo connectionInfo, CancellationToken cancellationToken) =>
-        QueryApi<PlayerApi>(
-          connectionInfo,
-          PlayerApiUrl(connectionInfo),
-          cancellationToken);
+    public async Task<PlayerApi> GetUserAndServerInfoAsync(ConnectionInfo connectionInfo, CancellationToken cancellationToken)
+    {
+        var info = await QueryApi<PlayerApi>(
+            connectionInfo,
+            PlayerApiUrl(connectionInfo),
+            cancellationToken).ConfigureAwait(false);
+
+        // Most Xtream servers answer a wrong password with 200 and auth 0 rather than 401.
+        if (info.UserInfo.Auth == 0)
+        {
+            WebhookService.PublishAuthFailure(connectionInfo, "The provider rejected the username or password (auth 0)", 0);
+        }
+
+        return info;
+    }
 
     public Task<List<Category>> GetVodCategoryAsync(ConnectionInfo connectionInfo, CancellationToken cancellationToken) =>
          QueryApi<List<Category>>(

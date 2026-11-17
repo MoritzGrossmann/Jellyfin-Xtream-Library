@@ -382,6 +382,13 @@ var XtreamLibraryConfig = (function () {
             self.renderProviderSelector();
             self.loadProviderIntoUI(0);
 
+            self.webhooks = (config.Webhooks || []).map(function (w) {
+                w.Headers = w.Headers || [];
+                w.Events = w.Events || [];
+                return w;
+            });
+            self.renderWebhooks();
+
             // Global settings (not per-provider)
             document.getElementById('txtSyncInterval').value = config.SyncIntervalMinutes || 60;
             document.getElementById('chkTriggerScan').checked = config.TriggerLibraryScan === true;
@@ -492,6 +499,7 @@ var XtreamLibraryConfig = (function () {
         ApiClient.getPluginConfiguration(this.pluginUniqueId).then(function (config) {
             // Write providers array
             config.Providers = self.providers;
+            config.Webhooks = self.readWebhooks();
 
             // Global settings only
             config.SyncIntervalMinutes = parseInt(document.getElementById('txtSyncInterval').value) || 60;
@@ -2118,6 +2126,197 @@ var XtreamLibraryConfig = (function () {
             .replace(/'/g, '&#39;');
     },
 
+    // =====================
+    // Webhooks
+    // =====================
+
+    webhooks: [],
+
+    webhookEvents: [
+        { id: 'StreamStarted', label: 'Stream started' },
+        { id: 'StreamStopped', label: 'Stream ended' },
+        { id: 'StreamLimitReached', label: 'Stream refused (all streams in use)' },
+        { id: 'SyncStarted', label: 'Library sync started' },
+        { id: 'SyncCompleted', label: 'Library sync ended (with stats)' },
+        { id: 'ProviderAuthFailed', label: 'Provider login failed' }
+    ],
+
+    // Starting point for a new webhook. One template serves every event: a block only renders
+    // when the event carries the value it tests.
+    defaultWebhookTemplate: function () {
+        return '{\n' +
+            '  "event": "{{NotificationType}}",\n' +
+            '  "time": "{{UtcTimestamp}}",\n' +
+            '  "text": "' +
+            '{{#if UserName}}{{UserName}} - {{ItemName}} ({{ProviderName}}, {{ActiveStreams}}/{{MaxConnections}}){{/if}}' +
+            '{{#if DurationSeconds}}Sync {{#if Success}}finished{{else}}failed{{/if}} in {{DurationSeconds}}s: ' +
+            '{{MoviesCreated}} movies, {{EpisodesCreated}} episodes{{/if}}' +
+            '{{#if Reason}}{{ProviderName}} ({{Host}}): {{Reason}}{{/if}}"\n' +
+            '}';
+    },
+
+    makeDefaultWebhook: function () {
+        return {
+            Name: 'Webhook ' + (this.webhooks.length + 1),
+            IsEnabled: true,
+            Url: '',
+            Method: 'POST',
+            ContentType: 'application/json',
+            Template: this.defaultWebhookTemplate(),
+            Headers: [],
+            Events: ['StreamStarted', 'StreamStopped', 'StreamLimitReached', 'SyncCompleted', 'ProviderAuthFailed']
+        };
+    },
+
+    renderWebhooks: function () {
+        var self = this;
+        var container = document.getElementById('webhookList');
+        if (!container) return;
+
+        var fieldStyle = 'padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; box-sizing: border-box;';
+        var html = '';
+        if (self.webhooks.length === 0) {
+            html += '<div class="fieldDescription" style="margin-bottom: 12px;">No webhooks yet.</div>';
+        }
+
+        self.webhooks.forEach(function (hook, i) {
+            var events = hook.Events || [];
+            html += '<div class="xtream-webhook" data-webhook-index="' + i + '" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 12px; margin-bottom: 16px;">';
+
+            html += '<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">';
+            html += '<input type="text" class="wh-name" placeholder="Name" value="' + self.escapeHtml(hook.Name) + '" style="flex: 1; ' + fieldStyle + '"/>';
+            html += '<label class="emby-checkbox-label" style="white-space: nowrap;"><input type="checkbox" class="wh-enabled"' + (hook.IsEnabled !== false ? ' checked' : '') + '/><span>Enabled</span></label>';
+            html += '<button type="button" class="wh-remove" title="Remove this webhook">Remove</button>';
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 8px;"><label>Webhook URL</label>';
+            html += '<input type="text" class="wh-url" placeholder="https://example.com/hook" value="' + self.escapeHtml(hook.Url) + '" style="width: 100%; ' + fieldStyle + '"/></div>';
+
+            html += '<div style="display: flex; gap: 8px; margin-bottom: 8px;">';
+            html += '<div style="flex: 1;"><label>Method</label><select class="wh-method" style="width: 100%; ' + fieldStyle + '">';
+            ['POST', 'PUT'].forEach(function (m) {
+                html += '<option value="' + m + '"' + ((hook.Method || 'POST').toUpperCase() === m ? ' selected' : '') + '>' + m + '</option>';
+            });
+            html += '</select></div>';
+            html += '<div style="flex: 2;"><label>Content type</label>';
+            html += '<input type="text" class="wh-content-type" value="' + self.escapeHtml(hook.ContentType || 'application/json') + '" style="width: 100%; ' + fieldStyle + '"/></div>';
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 8px;"><label>Events</label>';
+            self.webhookEvents.forEach(function (ev) {
+                html += '<div class="checkboxContainer"><label class="emby-checkbox-label">';
+                html += '<input type="checkbox" class="wh-event" data-event="' + ev.id + '"' + (events.indexOf(ev.id) >= 0 ? ' checked' : '') + '/>';
+                html += '<span>' + self.escapeHtml(ev.label) + '</span></label></div>';
+            });
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 8px;"><label>Template</label>';
+            html += '<textarea class="wh-template" rows="8" spellcheck="false" style="width: 100%; font-family: monospace; ' + fieldStyle + '">' + self.escapeHtml(hook.Template) + '</textarea></div>';
+
+            html += '<div style="margin-bottom: 8px;"><label>Headers</label>';
+            (hook.Headers || []).forEach(function (h, hi) {
+                html += '<div class="wh-header" style="display: flex; gap: 8px; margin-bottom: 4px;">';
+                html += '<input type="text" class="wh-header-key" placeholder="Name" value="' + self.escapeHtml(h.Key) + '" style="flex: 1; ' + fieldStyle + '"/>';
+                html += '<input type="text" class="wh-header-value" placeholder="Value" value="' + self.escapeHtml(h.Value) + '" style="flex: 2; ' + fieldStyle + '"/>';
+                html += '<button type="button" class="wh-header-remove" data-header-index="' + hi + '">&times;</button>';
+                html += '</div>';
+            });
+            html += '<button type="button" class="wh-header-add">Add header</button></div>';
+
+            html += '<div style="display: flex; gap: 8px; align-items: center;">';
+            html += '<select class="wh-test-event" style="' + fieldStyle + '">';
+            self.webhookEvents.forEach(function (ev) {
+                html += '<option value="' + ev.id + '">' + self.escapeHtml(ev.label) + '</option>';
+            });
+            html += '</select>';
+            html += '<button type="button" class="wh-test">Send test</button>';
+            html += '<span class="wh-test-status"></span>';
+            html += '</div>';
+
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('.xtream-webhook').forEach(function (card) {
+            var index = parseInt(card.getAttribute('data-webhook-index'), 10);
+            card.querySelector('.wh-remove').addEventListener('click', function () {
+                self.webhooks = self.readWebhooks();
+                self.webhooks.splice(index, 1);
+                self.renderWebhooks();
+            });
+            card.querySelector('.wh-header-add').addEventListener('click', function () {
+                self.webhooks = self.readWebhooks();
+                self.webhooks[index].Headers.push({ Key: '', Value: '' });
+                self.renderWebhooks();
+            });
+            card.querySelectorAll('.wh-header-remove').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    self.webhooks = self.readWebhooks();
+                    self.webhooks[index].Headers.splice(parseInt(btn.getAttribute('data-header-index'), 10), 1);
+                    self.renderWebhooks();
+                });
+            });
+            card.querySelector('.wh-test').addEventListener('click', function () {
+                self.testWebhook(card, index);
+            });
+        });
+    },
+
+    // Reads the webhooks as they stand in the page, so edits not yet saved are kept when the list is redrawn.
+    readWebhooks: function () {
+        var result = [];
+        document.querySelectorAll('#webhookList .xtream-webhook').forEach(function (card) {
+            var events = [];
+            card.querySelectorAll('.wh-event').forEach(function (cb) {
+                if (cb.checked) events.push(cb.getAttribute('data-event'));
+            });
+            var headers = [];
+            card.querySelectorAll('.wh-header').forEach(function (row) {
+                headers.push({
+                    Key: row.querySelector('.wh-header-key').value.trim(),
+                    Value: row.querySelector('.wh-header-value').value
+                });
+            });
+            result.push({
+                Name: card.querySelector('.wh-name').value.trim(),
+                IsEnabled: card.querySelector('.wh-enabled').checked,
+                Url: card.querySelector('.wh-url').value.trim(),
+                Method: card.querySelector('.wh-method').value,
+                ContentType: card.querySelector('.wh-content-type').value.trim() || 'application/json',
+                Template: card.querySelector('.wh-template').value,
+                Headers: headers,
+                Events: events
+            });
+        });
+        return result;
+    },
+
+    testWebhook: function (card, index) {
+        var self = this;
+        var hook = self.readWebhooks()[index];
+        var status = card.querySelector('.wh-test-status');
+        var eventName = card.querySelector('.wh-test-event').value;
+        status.textContent = 'Sending...';
+
+        fetch(ApiClient.getUrl('XtreamLibrary/Webhooks/Test'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'MediaBrowser Token=' + ApiClient.accessToken()
+            },
+            body: JSON.stringify({ Webhook: hook, Event: eventName })
+        }).then(function (response) {
+            return response.json();
+        }).then(function (data) {
+            var message = data.Message || data.title || 'No answer';
+            status.innerHTML = '<span style="color: ' + (data.Success ? 'green' : 'red') + ';">' +
+                self.escapeHtml(message + (data.StatusCode ? ' (HTTP ' + data.StatusCode + ')' : '')) + '</span>';
+        }).catch(function (error) {
+            status.innerHTML = '<span style="color: red;">' + self.escapeHtml('Test failed: ' + (error.message || 'see console')) + '</span>';
+        });
+    },
+
     updateScheduleVisibility: function () {
         const scheduleType = document.getElementById('selSyncScheduleType').value;
         const intervalSettings = document.getElementById('intervalSettings');
@@ -3049,6 +3248,16 @@ function initXtreamLibraryConfig() {
     if (chkPublishLiveTvPlaylists) {
         chkPublishLiveTvPlaylists.addEventListener('change', function () {
             XtreamLibraryConfig.updateTunerHint();
+        });
+    }
+
+    var btnAddWebhook = document.getElementById('btnAddWebhook');
+    if (btnAddWebhook) {
+        btnAddWebhook.addEventListener('click', function (e) {
+            e.preventDefault();
+            XtreamLibraryConfig.webhooks = XtreamLibraryConfig.readWebhooks();
+            XtreamLibraryConfig.webhooks.push(XtreamLibraryConfig.makeDefaultWebhook());
+            XtreamLibraryConfig.renderWebhooks();
         });
     }
 

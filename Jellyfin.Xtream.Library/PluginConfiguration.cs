@@ -64,6 +64,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public List<ProviderConfig> Providers { get; set; } = new();
 
+    /// <summary>
+    /// Gets or sets the webhooks sent when streams start or stop, a sync runs, or a provider
+    /// refuses the credentials.
+    /// </summary>
+    public List<WebhookConfig> Webhooks { get; set; } = new();
+
     // =====================
     // Global: Schedule
     // =====================

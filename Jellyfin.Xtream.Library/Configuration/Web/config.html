@@ -231,6 +231,7 @@
                         <button type="button" class="xtream-tab" data-tab="movies" role="tab" aria-selected="false" aria-controls="tab-movies">Movies</button>
                         <button type="button" class="xtream-tab" data-tab="series" role="tab" aria-selected="false" aria-controls="tab-series">Series</button>
                         <button type="button" class="xtream-tab" data-tab="livetv" role="tab" aria-selected="false" aria-controls="tab-livetv">Live TV</button>
+                        <button type="button" class="xtream-tab" data-tab="webhooks" role="tab" aria-selected="false" aria-controls="tab-webhooks">Webhooks</button>
                         <button type="button" class="xtream-tab" data-tab="general" role="tab" aria-selected="false" aria-controls="tab-general">General</button>
                     </div>
 
@@ -1398,6 +1399,49 @@
                                 </div>
                             </details>
                         </div>
+                        </div>
+                    </div>
+
+                    <!-- Webhooks Tab -->
+                    <div id="tab-webhooks" class="xtream-tab-content" role="tabpanel" aria-labelledby="webhooks">
+                        <div class="verticalSection">
+                            <h3 class="sectionTitle">Webhooks</h3>
+                            <div class="fieldDescription" style="margin-bottom: 12px;">
+                                Send an HTTP request to a URL when a stream starts or ends, when every stream of a provider is in use,
+                                when a sync starts or ends, or when a provider refuses your login. Set up like the official Jellyfin
+                                webhook plugin: a URL, optional headers and a template for the body. Remember to click <strong>Save</strong>
+                                at the bottom when you are done.
+                            </div>
+                            <div id="webhookList"></div>
+                            <button is="emby-button" type="button" class="raised" id="btnAddWebhook">
+                                <span>Add webhook</span>
+                            </button>
+                            <details style="margin-top: 20px;">
+                                <summary style="cursor: pointer;">Template help</summary>
+                                <div class="fieldDescription" style="margin-top: 8px;">
+                                    Templates use Handlebars syntax: <code>{{ItemName}}</code> inserts a value,
+                                    <code>{{#if Success}}…{{else}}…{{/if}}</code> and <code>{{#unless Success}}…{{/unless}}</code> are conditions.
+                                    With a JSON content type <code>{{Name}}</code> is escaped so quotes in a title cannot break the document;
+                                    <code>{{{Name}}}</code> inserts the value as it is.
+                                    <ul style="margin: 8px 0 0 18px;">
+                                        <li><strong>All events:</strong> <code>NotificationType</code>, <code>UtcTimestamp</code></li>
+                                        <li><strong>Stream started / ended / limit reached:</strong> <code>ProviderName</code>, <code>ProviderIndex</code>,
+                                            <code>UserName</code>, <code>DeviceName</code>, <code>ClientName</code>, <code>ItemName</code>, <code>ItemId</code>,
+                                            <code>ActiveStreams</code>, <code>MaxConnections</code></li>
+                                        <li><strong>Sync started:</strong> <code>ProviderCount</code></li>
+                                        <li><strong>Sync ended:</strong> <code>Success</code>, <code>Error</code>, <code>DurationSeconds</code>,
+                                            <code>MoviesCreated</code>, <code>MoviesUpdated</code>, <code>MoviesDeleted</code>, <code>SeriesCreated</code>,
+                                            <code>EpisodesCreated</code>, <code>EpisodesUpdated</code>, <code>EpisodesDeleted</code>,
+                                            <code>ChannelsCreated</code>, <code>ChannelsUpdated</code>, <code>ChannelsDeleted</code>, <code>Errors</code></li>
+                                        <li><strong>Provider login failed:</strong> <code>ProviderName</code>, <code>ProviderIndex</code>, <code>Host</code>,
+                                            <code>Reason</code>, <code>StatusCode</code> (a failed login is reported at most once per 15 minutes per provider)</li>
+                                    </ul>
+                                    <p style="margin-top: 8px;">
+                                        A stream that ends is reported when Jellyfin reports the end of playback. Streams from clients that
+                                        never report playback to Jellyfin are not seen.
+                                    </p>
+                                </div>
+                            </details>
                         </div>
                     </div>
 

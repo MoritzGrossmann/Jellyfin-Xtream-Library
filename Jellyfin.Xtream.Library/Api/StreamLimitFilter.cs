@@ -120,6 +120,8 @@ public sealed class StreamLimitFilter : IAsyncActionFilter
             item.Name,
             session?.UserName ?? "?");
 
+        _tracker.PublishLimitReached(item, session, provider);
+
         if (session is not null)
         {
             await _tracker.NotifyAsync(session.Id, provider).ConfigureAwait(false);
