@@ -1,5 +1,5 @@
 <div id="XtreamLibraryConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
-     data-require="emby-input,emby-button,emby-checkbox,emby-select">
+     data-require="emby-input,emby-button,emby-checkbox,emby-select,emby-textarea,emby-radio">
     <style>
         .xtream-tabs {
             display: flex;
@@ -61,9 +61,12 @@
             gap: 10px;
             margin-bottom: 10px;
         }
-        .folder-item-header input {
-            flex: 1;
-            max-width: 300px;
+        .xtream-mini-btn {
+            padding: 2px 10px;
+            min-width: 24px;
+            font-size: 0.85em;
+            margin-top: 0;
+            margin-bottom: 0;
         }
         .folder-item .category-list {
             max-height: 200px;
@@ -219,7 +222,7 @@
                     <!-- Provider Selector Bar -->
                     <div id="providerBar" class="provider-bar" style="display: none;">
                         <label for="selActiveProvider">Provider:</label>
-                        <select id="selActiveProvider"></select>
+                        <select is="emby-select" id="selActiveProvider"></select>
                         <button is="emby-button" type="button" id="btnAddProvider" class="raised button-submit" style="padding: 4px 12px; font-size: 0.9em;">+ Add Provider</button>
                         <button is="emby-button" type="button" id="btnRemoveProvider" class="raised button-cancel" style="padding: 4px 12px; font-size: 0.9em;">Remove</button>
                     </div>

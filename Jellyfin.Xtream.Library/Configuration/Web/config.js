@@ -781,8 +781,8 @@ var XtreamLibraryConfig = (function () {
         definitions.forEach(function (folder, folderIndex) {
             html += '<div class="folder-item" data-folder-index="' + folderIndex + '">';
             html += '<div class="folder-item-header">';
-            html += '<input type="text" class="folder-name-input" placeholder="Folder name (e.g., Kids)" value="' + self.escapeHtml(folder.name) + '" style="padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff;"/>';
-            html += '<button type="button" class="raised" onclick="XtreamLibraryConfig.removeFolder(\'' + type + '\', ' + folderIndex + ')" style="background: #c0392b; padding: 8px 12px; border: none; border-radius: 4px; color: #fff; cursor: pointer;">Remove</button>';
+            html += '<div class="inputContainer" style="margin: 0; flex: 1; max-width: 300px;"><input is="emby-input" type="text" class="folder-name-input" placeholder="Folder name (e.g., Kids)" value="' + self.escapeHtml(folder.name) + '"/></div>';
+            html += '<button is="emby-button" type="button" class="raised button-cancel" onclick="XtreamLibraryConfig.removeFolder(\'' + type + '\', ' + folderIndex + ')">Remove</button>';
             html += '</div>';
             html += '<div class="category-list">';
 
@@ -791,7 +791,7 @@ var XtreamLibraryConfig = (function () {
                 var checkboxId = type + '_folder' + folderIndex + '_cat' + category.CategoryId;
                 html += '<div class="checkboxContainer">';
                 html += '<label class="emby-checkbox-label">';
-                html += '<input type="checkbox" id="' + checkboxId + '" ';
+                html += '<input is="emby-checkbox" type="checkbox" id="' + checkboxId + '" ';
                 html += 'data-category-id="' + category.CategoryId + '" ';
                 html += 'data-folder-index="' + folderIndex + '" ';
                 html += 'data-category-index="' + catIndex + '" ' + isChecked + '/>';
@@ -1463,9 +1463,9 @@ var XtreamLibraryConfig = (function () {
                 const isExpanded = !!self.expandedLiveCategories[category.CategoryId];
                 html += '<div class="live-cat-row" data-cat-id="' + category.CategoryId + '" data-category-name="' + self.escapeHtml(category.CategoryName) + '">';
                 html += '<div style="display: flex; align-items: center;">';
-                html += '<button type="button" class="live-cat-expand" data-cat-id="' + category.CategoryId + '" ';
+                html += '<button is="emby-button" type="button" class="raised xtream-mini-btn live-cat-expand" data-cat-id="' + category.CategoryId + '" ';
                 html += 'aria-label="Toggle channels" ';
-                html += 'style="margin-right: 8px; background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; font-size: 0.85em; padding: 2px 8px; min-width: 24px; border-radius: 3px;">';
+                html += 'style="margin-right: 8px;">';
                 html += isExpanded ? '▾' : '▸';
                 html += '</button>';
                 html += '<label class="emby-checkbox-label" style="flex: 1;">';
@@ -1483,9 +1483,9 @@ var XtreamLibraryConfig = (function () {
                 const isExpanded = !!(self.expandedContentCategories[type] && self.expandedContentCategories[type][category.CategoryId]);
                 html += '<div class="content-cat-row" data-cat-id="' + category.CategoryId + '" data-content-type="' + type + '">';
                 html += '<div style="display: flex; align-items: center;">';
-                html += '<button type="button" class="content-cat-expand" data-cat-id="' + category.CategoryId + '" data-content-type="' + type + '" ';
+                html += '<button is="emby-button" type="button" class="raised xtream-mini-btn content-cat-expand" data-cat-id="' + category.CategoryId + '" data-content-type="' + type + '" ';
                 html += 'aria-label="Toggle items" ';
-                html += 'style="margin-right: 8px; background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; font-size: 0.85em; padding: 2px 8px; min-width: 24px; border-radius: 3px;">';
+                html += 'style="margin-right: 8px;">';
                 html += isExpanded ? '▾' : '▸';
                 html += '</button>';
                 html += '<label class="emby-checkbox-label" style="flex: 1;">';
@@ -1641,8 +1641,8 @@ var XtreamLibraryConfig = (function () {
             .catch(function (error) {
                 console.error('Failed to load channels for category ' + categoryId + ':', error);
                 panel.innerHTML = '<div style="color: #d33; padding: 4px 0;">Failed to load channels. ' +
-                    '<button type="button" class="live-channel-retry" data-cat-id="' + categoryId + '" ' +
-                    'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; margin-left: 8px; border-radius: 3px;">Retry</button></div>';
+                    '<button is="emby-button" type="button" class="raised xtream-mini-btn live-channel-retry" data-cat-id="' + categoryId + '" ' +
+                    'style="margin-left: 8px;">Retry</button></div>';
                 const retry = panel.querySelector('.live-channel-retry');
                 if (retry) {
                     retry.addEventListener('click', function () {
@@ -1677,10 +1677,9 @@ var XtreamLibraryConfig = (function () {
 
         let html = '';
         html += '<div style="margin: 4px 0;">';
-        html += '<button type="button" class="live-ch-select-all" data-cat-id="' + categoryId + '" ';
-        html += 'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; border-radius: 3px; margin-right: 6px;">Select all</button>';
-        html += '<button type="button" class="live-ch-deselect-all" data-cat-id="' + categoryId + '" ';
-        html += 'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; border-radius: 3px;">Deselect all</button>';
+        html += '<button is="emby-button" type="button" class="raised xtream-mini-btn live-ch-select-all" data-cat-id="' + categoryId + '" ';
+        html += 'style="margin-right: 6px;">Select all</button>';
+        html += '<button is="emby-button" type="button" class="raised xtream-mini-btn live-ch-deselect-all" data-cat-id="' + categoryId + '">Deselect all</button>';
         html += '<small style="opacity: 0.6; margin-left: 10px;">' + channels.length + ' channels</small>';
         if (!categorySelected) {
             html += '<small style="opacity: 0.6; margin-left: 10px; font-style: italic;">Category is deselected — tick a channel or the category to include it.</small>';
@@ -1812,8 +1811,8 @@ var XtreamLibraryConfig = (function () {
 
                 console.error('Failed to load ' + label + ' for category ' + categoryId + ':', error);
                 panel.innerHTML = '<div style="color: #d33; padding: 4px 0;">Failed to load ' + label + '. ' +
-                    '<button type="button" class="content-item-retry" data-cat-id="' + categoryId + '" data-content-type="' + type + '" ' +
-                    'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; margin-left: 8px; border-radius: 3px;">Retry</button></div>';
+                    '<button is="emby-button" type="button" class="raised xtream-mini-btn content-item-retry" data-cat-id="' + categoryId + '" data-content-type="' + type + '" ' +
+                    'style="margin-left: 8px;">Retry</button></div>';
                 const retry = panel.querySelector('.content-item-retry');
                 if (retry) {
                     retry.addEventListener('click', function () {
@@ -1845,10 +1844,9 @@ var XtreamLibraryConfig = (function () {
 
         let html = '';
         html += '<div style="margin: 4px 0;">';
-        html += '<button type="button" class="content-item-select-all" data-cat-id="' + categoryId + '" data-content-type="' + type + '" ';
-        html += 'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; border-radius: 3px; margin-right: 6px;">Select all</button>';
-        html += '<button type="button" class="content-item-deselect-all" data-cat-id="' + categoryId + '" data-content-type="' + type + '" ';
-        html += 'style="background: none; border: 1px solid rgba(255,255,255,0.2); color: inherit; cursor: pointer; padding: 2px 8px; border-radius: 3px;">Deselect all</button>';
+        html += '<button is="emby-button" type="button" class="raised xtream-mini-btn content-item-select-all" data-cat-id="' + categoryId + '" data-content-type="' + type + '" ';
+        html += 'style="margin-right: 6px;">Select all</button>';
+        html += '<button is="emby-button" type="button" class="raised xtream-mini-btn content-item-deselect-all" data-cat-id="' + categoryId + '" data-content-type="' + type + '">Deselect all</button>';
         html += '<small style="opacity: 0.6; margin-left: 10px;">' + items.length + ' ' + label + '</small>';
         if (!categorySelected) {
             html += '<small style="opacity: 0.6; margin-left: 10px; font-style: italic;">Category is deselected — tick an item or the category to include it.</small>';
@@ -2249,7 +2247,6 @@ var XtreamLibraryConfig = (function () {
         var container = document.getElementById('webhookList');
         if (!container) return;
 
-        var fieldStyle = 'padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; box-sizing: border-box;';
         var html = '';
         if (self.webhooks.length === 0) {
             html += '<div class="fieldDescription" style="margin-bottom: 12px;">No webhooks yet.</div>';
@@ -2259,63 +2256,63 @@ var XtreamLibraryConfig = (function () {
             var events = hook.Events || [];
             html += '<div class="xtream-webhook" data-webhook-index="' + i + '" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 12px; margin-bottom: 16px;">';
 
-            html += '<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">';
-            html += '<input type="text" class="wh-name" placeholder="Name" value="' + self.escapeHtml(hook.Name) + '" style="flex: 1; ' + fieldStyle + '"/>';
-            html += '<label class="emby-checkbox-label" style="white-space: nowrap;"><input type="checkbox" class="wh-enabled"' + (hook.IsEnabled !== false ? ' checked' : '') + '/><span>Enabled</span></label>';
-            html += '<button type="button" class="wh-remove" title="Remove this webhook">Remove</button>';
+            html += '<div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">';
+            html += '<div class="inputContainer" style="flex: 1; margin: 0;"><input is="emby-input" type="text" class="wh-name" placeholder="Name" value="' + self.escapeHtml(hook.Name) + '"/></div>';
+            html += '<label class="emby-checkbox-label" style="white-space: nowrap; width: auto;"><input is="emby-checkbox" type="checkbox" class="wh-enabled"' + (hook.IsEnabled !== false ? ' checked' : '') + '/><span>Enabled</span></label>';
+            html += '<button is="emby-button" type="button" class="raised button-cancel wh-remove" title="Remove this webhook">Remove</button>';
             html += '</div>';
 
             var service = self.webhookServices[hook.Service] ? hook.Service : 'Generic';
             var servicePreset = self.webhookServices[service];
-            html += '<div style="margin-bottom: 8px;"><label>Service</label>';
-            html += '<select class="wh-service" style="width: 100%; ' + fieldStyle + '">';
+            html += '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused">Service</label>';
+            html += '<select is="emby-select" class="wh-service">';
             Object.keys(self.webhookServices).forEach(function (id) {
                 html += '<option value="' + id + '"' + (id === service ? ' selected' : '') + '>' + self.escapeHtml(self.webhookServices[id].label) + '</option>';
             });
             html += '</select>';
             html += '<div class="fieldDescription">' + self.escapeHtml(servicePreset.hint) + ' Choosing a service fills in the content type, headers and template below.</div></div>';
 
-            html += '<div style="margin-bottom: 8px;"><label>Webhook URL</label>';
-            html += '<input type="text" class="wh-url" placeholder="' + self.escapeHtml(servicePreset.urlPlaceholder) + '" value="' + self.escapeHtml(hook.Url) + '" style="width: 100%; ' + fieldStyle + '"/></div>';
+            html += '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused">Webhook URL</label>';
+            html += '<input is="emby-input" type="text" class="wh-url" placeholder="' + self.escapeHtml(servicePreset.urlPlaceholder) + '" value="' + self.escapeHtml(hook.Url) + '"/></div>';
 
-            html += '<div style="display: flex; gap: 8px; margin-bottom: 8px;">';
-            html += '<div style="flex: 1;"><label>Method</label><select class="wh-method" style="width: 100%; ' + fieldStyle + '">';
+            html += '<div style="display: flex; gap: 12px;">';
+            html += '<div class="inputContainer" style="flex: 1;"><label class="inputLabel inputLabelUnfocused">Method</label><select is="emby-select" class="wh-method">';
             ['POST', 'PUT'].forEach(function (m) {
                 html += '<option value="' + m + '"' + ((hook.Method || 'POST').toUpperCase() === m ? ' selected' : '') + '>' + m + '</option>';
             });
             html += '</select></div>';
-            html += '<div style="flex: 2;"><label>Content type</label>';
-            html += '<input type="text" class="wh-content-type" value="' + self.escapeHtml(hook.ContentType || 'application/json') + '" style="width: 100%; ' + fieldStyle + '"/></div>';
+            html += '<div class="inputContainer" style="flex: 2;"><label class="inputLabel inputLabelUnfocused">Content type</label>';
+            html += '<input is="emby-input" type="text" class="wh-content-type" value="' + self.escapeHtml(hook.ContentType || 'application/json') + '"/></div>';
             html += '</div>';
 
-            html += '<div style="margin-bottom: 8px;"><label>Events</label>';
+            html += '<div style="margin-bottom: 8px;"><label class="inputLabel inputLabelUnfocused" style="position: static;">Events</label>';
             self.webhookEvents.forEach(function (ev) {
                 html += '<div class="checkboxContainer"><label class="emby-checkbox-label">';
-                html += '<input type="checkbox" class="wh-event" data-event="' + ev.id + '"' + (events.indexOf(ev.id) >= 0 ? ' checked' : '') + '/>';
+                html += '<input is="emby-checkbox" type="checkbox" class="wh-event" data-event="' + ev.id + '"' + (events.indexOf(ev.id) >= 0 ? ' checked' : '') + '/>';
                 html += '<span>' + self.escapeHtml(ev.label) + '</span></label></div>';
             });
             html += '</div>';
 
-            html += '<div style="margin-bottom: 8px;"><label>Template</label>';
-            html += '<textarea class="wh-template" rows="8" spellcheck="false" style="width: 100%; font-family: monospace; ' + fieldStyle + '">' + self.escapeHtml(hook.Template) + '</textarea></div>';
+            html += '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused">Template</label>';
+            html += '<textarea is="emby-textarea" class="wh-template" rows="8" spellcheck="false" style="font-family: monospace;">' + self.escapeHtml(hook.Template) + '</textarea></div>';
 
-            html += '<div style="margin-bottom: 8px;"><label>Headers</label>';
+            html += '<div style="margin-bottom: 8px;"><label class="inputLabel inputLabelUnfocused" style="position: static;">Headers</label>';
             (hook.Headers || []).forEach(function (h, hi) {
-                html += '<div class="wh-header" style="display: flex; gap: 8px; margin-bottom: 4px;">';
-                html += '<input type="text" class="wh-header-key" placeholder="Name" value="' + self.escapeHtml(h.Key) + '" style="flex: 1; ' + fieldStyle + '"/>';
-                html += '<input type="text" class="wh-header-value" placeholder="Value" value="' + self.escapeHtml(h.Value) + '" style="flex: 2; ' + fieldStyle + '"/>';
-                html += '<button type="button" class="wh-header-remove" data-header-index="' + hi + '">&times;</button>';
+                html += '<div class="wh-header" style="display: flex; gap: 8px; margin-bottom: 4px; align-items: center;">';
+                html += '<div class="inputContainer" style="flex: 1; margin: 0;"><input is="emby-input" type="text" class="wh-header-key" placeholder="Name" value="' + self.escapeHtml(h.Key) + '"/></div>';
+                html += '<div class="inputContainer" style="flex: 2; margin: 0;"><input is="emby-input" type="text" class="wh-header-value" placeholder="Value" value="' + self.escapeHtml(h.Value) + '"/></div>';
+                html += '<button is="emby-button" type="button" class="raised wh-header-remove" data-header-index="' + hi + '">&times;</button>';
                 html += '</div>';
             });
-            html += '<button type="button" class="wh-header-add">Add header</button></div>';
+            html += '<button is="emby-button" type="button" class="raised wh-header-add">Add header</button></div>';
 
             html += '<div style="display: flex; gap: 8px; align-items: center;">';
-            html += '<select class="wh-test-event" style="' + fieldStyle + '">';
+            html += '<div class="selectContainer" style="margin: 0;"><select is="emby-select" class="wh-test-event">';
             self.webhookEvents.forEach(function (ev) {
                 html += '<option value="' + ev.id + '">' + self.escapeHtml(ev.label) + '</option>';
             });
-            html += '</select>';
-            html += '<button type="button" class="wh-test">Send test</button>';
+            html += '</select></div>';
+            html += '<button is="emby-button" type="button" class="raised button-submit wh-test">Send test</button>';
             html += '<span class="wh-test-status"></span>';
             html += '</div>';
 
