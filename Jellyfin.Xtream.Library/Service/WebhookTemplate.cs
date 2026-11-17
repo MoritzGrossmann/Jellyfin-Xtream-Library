@@ -23,7 +23,8 @@ namespace Jellyfin.Xtream.Library.Service;
 
 /// <summary>
 /// Renders the small subset of Handlebars that webhook templates use: <c>{{Name}}</c>,
-/// <c>{{{Name}}}</c>, <c>{{#if Name}}…{{else}}…{{/if}}</c> and <c>{{#unless Name}}…{{/unless}}</c>.
+/// <c>{{{Name}}}</c>, <c>{{#if Name}}…{{else}}…{{/if}}</c> and <c>{{#unless Name}}…{{/unless}}</c>,
+/// <c>{{#if_equals Name 'text'}}…{{else}}…{{/if_equals}}</c> and <c>{{#if_not_equals A B}}…{{/if_not_equals}}</c>.
 /// <para>
 /// <c>{{Name}}</c> is escaped for the body's format when it is JSON, so a title with a quote
 /// cannot break the document; <c>{{{Name}}}</c> inserts the value as it is. A name that is
@@ -32,7 +33,9 @@ namespace Jellyfin.Xtream.Library.Service;
 /// </summary>
 public static class WebhookTemplate
 {
-    // The default encoder writes a quote as 0022, which is valid but unreadable in a log or a chat message.
+    private const char LiteralMarker = '\u0001';
+
+    // The default encoder writes a quote as ", which is valid but unreadable in a log or a chat message.
     private static readonly JsonSerializerOptions EscapeOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private enum TokenKind
@@ -46,6 +49,10 @@ public static class WebhookTemplate
         Else,
         EndIf,
         EndUnless,
+        IfEquals,
+        IfNotEquals,
+        EndIfEquals,
+        EndIfNotEquals,
     }
 
     private enum NodeKind
@@ -54,6 +61,8 @@ public static class WebhookTemplate
         Variable,
         If,
         Unless,
+        IfEquals,
+        IfNotEquals,
     }
 
     /// <summary>
@@ -167,8 +176,73 @@ public static class WebhookTemplate
 
                     Emit(truthy ? node.Children : node.Else, data, escape, sb);
                     break;
+                case NodeKind.IfEquals:
+                case NodeKind.IfNotEquals:
+                    bool same = Equal(node.Args[0], node.Args[1], data);
+                    Emit((same == (node.Kind == NodeKind.IfEquals)) ? node.Children : node.Else, data, escape, sb);
+                    break;
             }
         }
+    }
+
+    // An argument is a quoted literal ('x' or "x"), or the name of a value. Quoted ones keep a leading marker
+    // so a literal that looks like a name is still read as text.
+    private static List<string> SplitArgs(string text)
+    {
+        var args = new List<string>();
+        int i = 0;
+        while (i < text.Length)
+        {
+            if (char.IsWhiteSpace(text[i]))
+            {
+                i++;
+                continue;
+            }
+
+            if (text[i] == '\x27' || text[i] == '"')
+            {
+                char quote = text[i];
+                int close = text.IndexOf(quote, i + 1);
+                if (close < 0)
+                {
+                    throw new FormatException($"A quote is never closed in '{text}'.");
+                }
+
+                args.Add(LiteralMarker + text.Substring(i + 1, close - i - 1));
+                i = close + 1;
+            }
+            else
+            {
+                int start = i;
+                while (i < text.Length && !char.IsWhiteSpace(text[i]))
+                {
+                    i++;
+                }
+
+                args.Add(text.Substring(start, i - start));
+            }
+        }
+
+        if (args.Count != 2)
+        {
+            throw new FormatException($"A comparison needs exactly two values, found '{text}'.");
+        }
+
+        return args;
+    }
+
+    private static bool Equal(string a, string b, IReadOnlyDictionary<string, object?> data)
+        => string.Equals(Resolve(a, data), Resolve(b, data), StringComparison.Ordinal);
+
+    private static string Resolve(string arg, IReadOnlyDictionary<string, object?> data)
+    {
+        if (arg.Length > 0 && arg[0] == LiteralMarker)
+        {
+            return arg.Substring(1);
+        }
+
+        data.TryGetValue(arg, out var value);
+        return Format(value);
     }
 
     private static List<Token> Tokenize(string template)
@@ -228,10 +302,22 @@ public static class WebhookTemplate
             return new Token(TokenKind.Unless, inner.Substring(8).Trim());
         }
 
+        if (inner.StartsWith("#if_equals ", StringComparison.Ordinal))
+        {
+            return new Token(TokenKind.IfEquals, inner.Substring(11).Trim());
+        }
+
+        if (inner.StartsWith("#if_not_equals ", StringComparison.Ordinal))
+        {
+            return new Token(TokenKind.IfNotEquals, inner.Substring(15).Trim());
+        }
+
         return inner switch
         {
             "/if" => new Token(TokenKind.EndIf, string.Empty),
             "/unless" => new Token(TokenKind.EndUnless, string.Empty),
+            "/if_equals" => new Token(TokenKind.EndIfEquals, string.Empty),
+            "/if_not_equals" => new Token(TokenKind.EndIfNotEquals, string.Empty),
             "else" or "^" => new Token(TokenKind.Else, string.Empty),
             _ => new Token(TokenKind.Variable, inner),
         };
@@ -260,6 +346,27 @@ public static class WebhookTemplate
                 case TokenKind.Comment:
                     pos++;
                     break;
+                case TokenKind.IfEquals:
+                case TokenKind.IfNotEquals:
+                    pos++;
+                    bool positive = token.Kind == TokenKind.IfEquals;
+                    var compare = new Node(positive ? NodeKind.IfEquals : NodeKind.IfNotEquals) { Text = token.Value, Args = SplitArgs(token.Value) };
+                    var compareEnd = positive ? TokenKind.EndIfEquals : TokenKind.EndIfNotEquals;
+                    compare.Children = ParseNodes(tokens, ref pos, compareEnd);
+                    if (pos < tokens.Count && tokens[pos].Kind == TokenKind.Else)
+                    {
+                        pos++;
+                        compare.Else = ParseNodes(tokens, ref pos, compareEnd);
+                    }
+
+                    if (pos >= tokens.Count || tokens[pos].Kind != compareEnd)
+                    {
+                        throw new FormatException($"The block '{token.Value}' is never closed.");
+                    }
+
+                    pos++;
+                    nodes.Add(compare);
+                    break;
                 case TokenKind.If:
                 case TokenKind.Unless:
                     pos++;
@@ -283,6 +390,8 @@ public static class WebhookTemplate
                 case TokenKind.Else:
                 case TokenKind.EndIf:
                 case TokenKind.EndUnless:
+                case TokenKind.EndIfEquals:
+                case TokenKind.EndIfNotEquals:
                     if (until is null)
                     {
                         throw new FormatException("A block is closed that was never opened.");
@@ -316,5 +425,7 @@ public static class WebhookTemplate
         public List<Node> Children { get; set; } = new();
 
         public List<Node> Else { get; set; } = new();
+
+        public List<string> Args { get; set; } = new();
     }
 }

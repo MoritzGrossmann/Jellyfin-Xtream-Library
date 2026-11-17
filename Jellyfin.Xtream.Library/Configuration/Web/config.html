@@ -1420,7 +1420,7 @@
                                 <summary style="cursor: pointer;">Template help</summary>
                                 <div class="fieldDescription" style="margin-top: 8px;">
                                     Templates use Handlebars syntax: <code>{{ItemName}}</code> inserts a value,
-                                    <code>{{#if Success}}…{{else}}…{{/if}}</code> and <code>{{#unless Success}}…{{/unless}}</code> are conditions.
+                                    <code>{{#if Success}}…{{else}}…{{/if}}</code> and <code>{{#unless Success}}…{{/unless}}</code> are conditions. Compare with <code>{{#if_equals NotificationType 'StreamStarted'}}…{{else}}…{{/if_equals}}</code> (or <code>if_not_equals</code>) to give one event its own text; the second value may be a quoted text or another name.
                                     With a JSON content type <code>{{Name}}</code> is escaped so quotes in a title cannot break the document;
                                     <code>{{{Name}}}</code> inserts the value as it is. With a form content type values are URL-encoded. Header values are templates too.
                                     <ul style="margin: 8px 0 0 18px;">

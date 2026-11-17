@@ -192,3 +192,53 @@ public class WebhookDescriptionTests
     public void ContentType_DecidesEscaping(string contentType, WebhookEscape expected)
         => new WebhookConfig { ContentType = contentType }.Escape.Should().Be(expected);
 }
+
+public class WebhookIfEqualsTests
+{
+    private static Dictionary<string, object?> D(string type, string other = "")
+        => new() { ["NotificationType"] = type, ["Other"] = other };
+
+    [Theory]
+    [InlineData("StreamStarted", "start")]
+    [InlineData("StreamStopped", "stop")]
+    [InlineData("SyncStarted", "other")]
+    public void IfEquals_PicksTheMatchingBranch(string type, string expected)
+        => WebhookTemplate.Render(
+                "{{#if_equals NotificationType 'StreamStarted'}}start{{else}}{{#if_equals NotificationType \"StreamStopped\"}}stop{{else}}other{{/if_equals}}{{/if_equals}}",
+                D(type),
+                false)
+            .Should().Be(expected);
+
+    [Fact]
+    public void IfEquals_ComparesTwoValues()
+    {
+        const string t = "{{#if_equals NotificationType Other}}same{{else}}diff{{/if_equals}}";
+        WebhookTemplate.Render(t, D("A", "A"), false).Should().Be("same");
+        WebhookTemplate.Render(t, D("A", "B"), false).Should().Be("diff");
+    }
+
+    [Fact]
+    public void IfNotEquals_IsTheInverse()
+    {
+        const string t = "{{#if_not_equals NotificationType 'X'}}not x{{else}}x{{/if_not_equals}}";
+        WebhookTemplate.Render(t, D("A"), false).Should().Be("not x");
+        WebhookTemplate.Render(t, D("X"), false).Should().Be("x");
+    }
+
+    [Fact]
+    public void QuotedLiteral_IsNotTakenForAName()
+        => WebhookTemplate.Render("{{#if_equals 'Other' Other}}y{{else}}n{{/if_equals}}", D("A", "Other"), false).Should().Be("y");
+
+    [Fact]
+    public void LiteralMayContainSpaces()
+        => WebhookTemplate.Render("{{#if_equals Other 'a b'}}y{{else}}n{{/if_equals}}", D("A", "a b"), false).Should().Be("y");
+
+    [Theory]
+    [InlineData("{{#if_equals A}}x{{/if_equals}}")]
+    [InlineData("{{#if_equals A 'B' C}}x{{/if_equals}}")]
+    [InlineData("{{#if_equals A 'B}}x{{/if_equals}}")]
+    [InlineData("{{#if_equals A 'B'}}x")]
+    [InlineData("{{#if_equals A 'B'}}x{{/if_not_equals}}")]
+    public void Malformed_IsReported(string template)
+        => WebhookTemplate.Validate(template).Should().NotBeNull();
+}
